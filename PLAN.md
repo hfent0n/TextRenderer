@@ -25,6 +25,9 @@ SixLabors.Fonts is used **only** to parse the font (metrics + glyph outlines). L
 16. **PNG uses `CompressionLevel.Fastest`.** CPU per request matters more than a few hundred bytes for a heavily used service.
 17. **CRC32 comes from Microsoft's `System.IO.Hashing` package.**
 18. **Visual outputs in `out/` are PNG only.** The earlier `.ppm` files are removed. PPM stays covered by its unit tests.
+19. **The oracle checks per glyph and whole string.** Per glyph, Skia fills its own glyph outlines at *our* pen positions, which isolates parsing and rasterizing. Whole string, Skia uses its own glyph positions, which also checks our layout. Skia fills outlines with its path rasterizer (`GetGlyphPath`) into an `Alpha8` surface, so raw coverage is compared with no text gamma or hinting.
+20. **An oracle comparison passes if** mean absolute coverage difference over the ink's bounding box is ≤ 0.03 at every size, **and** IoU of inked pixels (coverage ≥ 0.5) is ≥ 0.95 at ≥ 64px or ≥ 0.90 at 24–63px. IoU isn't checked below 24px: thin strokes put many pixels near 0.5, and Skia's exact-area coverage vs our 4×4 sampling flips them (even 16×16 sampling only reached 0.87 at 12px).
+21. **Golden images fail when missing.** A missing golden image is written and the test fails with "review and commit". `UPDATE_GOLDEN=1 dotnet test` regenerates them on purpose. On a mismatch, `<name>.actual.png` and `<name>.diff.png` are written next to the golden image.
 
 ## Location
 
@@ -200,3 +203,47 @@ This gets replaced or joined by the HTTP endpoint in Job 2.
 - Multi-line text and word wrap
 - Hinting and subpixel (LCD) rendering
 - Glyph caching (Job 2; enabled by decision 2)
+
+## Future work
+
+### Small-text quality (≈12px)
+
+**Problem.** At small sizes, 4×4 supersampling quantizes coverage. Along a vertical edge, coverage can only be a multiple of 0.25 per sub-row, so a stem's darkness depends on where it happens to land relative to the sample grid. At 12px DejaVu stems are only about 1.2px wide, so the error is visible:
+
+- A single "H" at 12px has **12% less ink** than SkiaSharp's (stems 1.18px wide only catch 4 of the ~4.7 samples they deserve).
+- Oracle IoU at 12px is 0.80–0.89, against 0.92 at 32px and 0.97 at 96px. That's why decision 20 doesn't check IoU below 24px.
+- Mean coverage difference is still small (≤ 0.022), so shapes and positions are right. The issue is edge shading and stem weight, not geometry.
+
+**Measured alternatives** (oracle, 30 cases per size):
+
+| Sampling | 12px IoU (min / avg) | 32px IoU (min / avg) | Relative rasterizing cost |
+|---|---|---|---|
+| 4×4 (current) | 0.795 / 0.839 | 0.915 / 0.927 | 1× |
+| 8×8 | 0.846 / 0.881 | 0.938 / 0.949 | ~4× |
+| 16×16 | 0.866 / 0.893 | 0.942 / 0.954 | ~16× |
+
+More samples help but don't close the gap, and the cost grows fast.
+
+**Recommended fix: exact-area (analytic) coverage.** Instead of counting samples, compute how much of each pixel's area the outline covers, as Skia, FreeType and font-rs do:
+
+1. For each edge, walk the pixel rows it crosses. In each row, add the edge's signed contribution to an accumulation buffer: the area to its right within that pixel, plus the remaining height carried to the next pixel.
+2. Take a running sum along each row. The absolute value, clamped to 1, is the coverage.
+3. This gives exact coverage for non-overlapping outlines in a single pass, usually *faster* than 4×4 sampling, with no sample count to tune.
+
+Trade-off: the running-sum method is the non-zero rule only when contours don't overlap. Overlapping contours (rare in TTF, common in variable fonts and some CFF fonts) can push the sum above 1, so it's clamped. That's what font-rs does and is acceptable here. The current overlapping-squares unit tests will show exactly what changes.
+
+`Rasterizer.Rasterize(edges, width, height) → CoverageMask` stays the same, so nothing else in the pipeline changes.
+
+**How to verify:**
+
+- Re-enable the oracle IoU check below 24px and tighten it (target IoU ≥ 0.90 at 12px, ≥ 0.95 at 32px), and lower `MaxMeanDiff`.
+- Add an oracle check that total ink is within ±2% of Skia's at 12px.
+- The `Ink_area_matches_outline_area` invariant should pass at 12px, not just 64px.
+- Rasterizer unit tests: the partial-coverage cases become exact (an edge at 2.2 gives 0.8, not 0.75), and the 4×4-specific values (such as the triangle's 7.5) change to the true areas (8).
+- Regenerate golden images with `UPDATE_GOLDEN=1`, compare the diffs by eye, and commit.
+- Benchmark before/after, since rasterizing is the hot path for the HTTP service.
+
+**Related improvements, out of scope for this fix:**
+
+- **Gamma-correct blending.** Blending in linear light instead of sRGB values makes anti-aliased edges look less dark and thin. It affects every size, but is most noticeable on small text.
+- **Hinting** (snapping stems to whole pixels) gives the crispest small text, but it's a large feature and changes glyph shapes. Not recommended unless analytic coverage isn't enough.
