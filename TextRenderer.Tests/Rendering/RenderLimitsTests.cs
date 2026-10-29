@@ -68,4 +68,42 @@ public class RenderLimitsTests
         Assert.Equal(500, limits.MaxTextLength);
         Assert.Equal("fonts", limits.FontDirectory);
     }
+
+    [Fact]
+    public void Defaults_are_valid()
+    {
+        Assert.Empty(new RenderLimits().Validate());
+    }
+
+    public static TheoryData<string, string> InvalidLimits() => new()
+    {
+        { "MaxTextLength=0", "MaxTextLength must be positive." },
+        { "MinFontSize=0", "MinFontSize must be a positive number." },
+        { "MinFontSize=NaN", "MinFontSize must be a positive number." },
+        { "MaxFontSize=0.5", "MaxFontSize must be at least MinFontSize." },
+        { "MaxFontSize=Infinity", "MaxFontSize must be at least MinFontSize." },
+        { "MaxPadding=-1", "MaxPadding must not be negative." },
+        { "MaxCanvasPixels=0", "MaxCanvasPixels must be positive." },
+        { "MaxRequestBodyBytes=0", "MaxRequestBodyBytes must be positive." },
+        { "RenderTimeout=00:00:00", "RenderTimeout must be positive." },
+        { "MaxConcurrentRenders=0", "MaxConcurrentRenders must be positive." },
+        { "MaxQueuedRenders=-1", "MaxQueuedRenders must not be negative." },
+        { "FontDirectory= ", "FontDirectory is required." },
+    };
+
+    [Theory]
+    [MemberData(nameof(InvalidLimits))]
+    public void Nonsensical_limits_are_reported(string setting, string expected)
+    {
+        var (key, value) = (setting.Split('=')[0], setting.Split('=')[1]);
+        var limits = Bind(new() { [$"Render:{key}"] = value });
+
+        Assert.Equal([expected], limits.Validate());
+    }
+
+    [Fact]
+    public void Zero_padding_and_zero_queue_are_allowed()
+    {
+        Assert.Empty(Bind(new() { ["Render:MaxPadding"] = "0", ["Render:MaxQueuedRenders"] = "0" }).Validate());
+    }
 }

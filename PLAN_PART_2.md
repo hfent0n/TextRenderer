@@ -24,6 +24,9 @@ Job 1 (rendering core, its decisions and its tests) is in [PLAN_PART_1.md](PLAN_
 12. **Character errors are capped at 20.** The first 20 distinct offending characters are listed (with code points), then "…and N more".
 13. **Invisible formatting characters are rejected** along with control characters: Unicode category Cf as well as Cc (zero-width space/joiner, BOM, bidi overrides). With no shaping they do nothing useful, and bidi overrides can make text display differently from what it contains.
 14. **`format` and colour hex digits are case-insensitive** (`PNG`, `#ff00aa`). The `#` and six digits are still required. Font IDs stay exact.
+15. **Limits are validated at startup.** The service refuses to start if any limit is nonsensical (non-positive sizes or counts, `MinFontSize` > `MaxFontSize`, zero timeout), consistent with decision 10.
+16. **Unknown JSON properties are rejected** with `400` naming the property, so a typo like `"forground"` isn't silently ignored. Property names stay case-insensitive.
+17. **`POST /render` requires `Content-Type: application/json`**; anything else gets `415`.
 
 ## API
 
@@ -46,8 +49,9 @@ Responses:
 | Status | When | Body |
 |---|---|---|
 | `200` | Rendered | Image bytes, `Content-Type: image/png` or `image/x-portable-pixmap` |
-| `400` | Malformed JSON, missing/invalid field, unknown font, unsupported characters, limit exceeded | `ProblemDetails` with an `errors` map per field |
+| `400` | Malformed JSON, unknown property, missing/invalid field, unknown font, unsupported characters, limit exceeded | `ProblemDetails` with an `errors` map per field |
 | `413` | Body larger than the limit | `ProblemDetails` |
+| `415` | `Content-Type` isn't `application/json` (decision 17) | `ProblemDetails` |
 | `429` | Too many renders queued | `ProblemDetails`, `Retry-After` header |
 | `503` | Render exceeded the timeout | `ProblemDetails` |
 | `500` | Unexpected error | `ProblemDetails` without internals; full details in the log |

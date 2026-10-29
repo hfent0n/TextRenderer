@@ -1,3 +1,29 @@
 @TextRenderer_HostAddress = http://localhost:5133
 
-###
+### List fonts
+GET {{TextRenderer_HostAddress}}/fonts
+
+### Render a PNG
+POST {{TextRenderer_HostAddress}}/render
+Content-Type: application/json
+
+{
+  "text": "Hello, World!",
+  "font": "dejavu-serif",
+  "fontSize": 48,
+  "foreground": "#1A4D8F",
+  "background": "#FFFFFF"
+}
+
+### Validation errors (400): unsupported character, control character, unknown property
+POST {{TextRenderer_HostAddress}}/render
+Content-Type: application/json
+
+{
+  "text": "a\n中",
+  "font": "dejavu-sans",
+  "forground": "#FF0000"
+}
+
+### Health
+GET {{TextRenderer_HostAddress}}/health

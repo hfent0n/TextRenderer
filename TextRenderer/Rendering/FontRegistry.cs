@@ -24,6 +24,15 @@ public sealed class FontRegistry
 
     public bool TryGet(string id, out IFontSource font) => _sources.TryGetValue(id, out font!);
 
+    /// <summary>A registry from already-loaded fonts, used as given (not wrapped in a cache). Mainly for tests.</summary>
+    public static FontRegistry Create(IEnumerable<(FontInfo Info, IFontSource Source)> fonts)
+    {
+        var list = fonts.ToList();
+        return new FontRegistry(
+            list.ToDictionary(f => f.Info.Id, f => f.Source),
+            list.Select(f => f.Info).OrderBy(f => f.Id, StringComparer.Ordinal).ToList());
+    }
+
     /// <param name="directory">Absolute, or relative to the app's base directory.</param>
     public static FontRegistry Load(string directory)
     {
