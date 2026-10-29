@@ -12,7 +12,7 @@ SixLabors.Fonts is used **only** to parse the font (metrics + glyph outlines). L
 3. **Support both quadratic and cubic segments** (TTF is quadratic; CFF/OTF can emit cubics).
 4. **Rasterize per glyph**, then blend each glyph's coverage onto a shared `Canvas` using "over" blending (`dst = dst·(1−a) + colour·a`) so overlapping glyph boxes don't darken.
 5. **Single line only.** Newlines are out of scope for now.
-6. **Don't name anything `TextRenderer`.** It clashes with the project namespace and with the SixLabors type. The orchestrator is `TextImageRenderer`.
+6. **Don't name anything `TextRenderer`.** It clashes with the project namespace and with the SixLabors type. The orchestrator is `RenderPipeline`.
 
 ## Location
 
@@ -38,7 +38,7 @@ SixLabors.Fonts is used **only** to parse the font (metrics + glyph outlines). L
 | `Canvas` | class | `Width`, `Height`, RGBA `byte[]`, `Clear(colour)`, `Blend(x, y, coverage, colour)` |
 | `IImageEncoder` | interface | `byte[] Encode(Canvas)`, `string ContentType` |
 | `PpmEncoder` / `PngEncoder` | classes | PPM (P6) first; PNG (zlib + CRC via `System.IO.Compression`) after |
-| `TextImageRenderer` | class | Orchestrator: layout → for each glyph (flatten → rasterize → blend) → encode |
+| `RenderPipeline` | class | Orchestrator: layout → for each glyph (flatten → rasterize → blend) → encode |
 
 ## Pipeline
 
@@ -86,6 +86,12 @@ string ─► TextLayout ──(Glyph, penX)*──► PathFlattener ──Edge[
    - `dotnet add TextRenderer package SixLabors.Fonts`
    - Implement `IFontSource`, `SixLaborsFontSource`, `OutlineCollector`, `FontMetrics`, `Glyph`, `Contour`
    - Confirm coordinates are in font units (roughly 0..`UnitsPerEm`) and Y points up. If SixLabors flips Y, un-flip it in `OutlineCollector`. To get 1:1 font units, render at `pointSize = UnitsPerEm`, 72 DPI.
+   - **Spike findings (SixLabors.Fonts 3.2.0):**
+     - `Glyph.RenderTo` is internal. Use `SixLabors.Fonts.Rendering.TextRenderer.RenderTo(renderer, glyphId, GlyphOptions)`, which renders one glyph by ID with no text layout.
+     - With `TextBaseline = Alphabetic` and `Origin = 0`, the origin is the baseline, but Y is **down**. `OutlineCollector` negates Y.
+     - Glyph IDs come from `Font.TryGetGlyphId`, falling back to 0 (`.notdef`). Metrics come from `FontMetrics.TryGetGlyphMetrics(glyphId, …)`.
+     - DejaVuSans: `UnitsPerEm` 2048, ascender 1901, descender −483. "H" advance is 1540, lsb 201.
+     - ⚠️ 3.x needs a Six Labors licence key for **Release** builds. Debug builds only give a warning.
    - 🧪 Tests:
      - DejaVuSans metrics: `UnitsPerEm == 2048`, `Ascender > 0`, `Descender < 0`
      - "H": one contour, positive advance, all points within `0..UnitsPerEm`, top of the H has larger Y than the bottom (Y-up)
@@ -110,7 +116,7 @@ string ─► TextLayout ──(Glyph, penX)*──► PathFlattener ──Edge[
      - Shape partly off-canvas doesn't throw and is clipped
    - 👀 Render a single "H", then an "o".
 4. **Layout + orchestrator**
-   - `RenderOptions`, `TextLayout`, `TextImageRenderer`
+   - `RenderOptions`, `TextLayout`, `RenderPipeline`
    - 🧪 Tests (using a fake `IFontSource` with known advances, so expected values are exact):
      - Pen positions are cumulative scaled advances starting at `Padding`
      - Width/height/baseline match the formulas above
