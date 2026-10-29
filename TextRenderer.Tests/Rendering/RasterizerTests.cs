@@ -71,25 +71,85 @@ public class RasterizerTests
         Assert.Equal(Pixels(1, 1, 5, 5).Union(Pixels(3, 3, 7, 7)).ToHashSet(), filled);
     }
 
-    [Fact]
-    public void Pixel_is_filled_only_when_its_centre_is_inside()
+    [Theory]
+    [InlineData(2.0f, 1.0f)]    // all 4 sample columns (2.125, 2.375, 2.625, 2.875) inside
+    [InlineData(2.2f, 0.75f)]   // 2.125 is now outside
+    [InlineData(2.4f, 0.5f)]
+    [InlineData(2.5f, 0.5f)]    // edge through the pixel's middle
+    [InlineData(2.7f, 0.25f)]
+    [InlineData(2.9f, 0.0f)]    // past the last sample
+    public void Vertical_edge_inside_a_pixel_gives_partial_coverage(float edgeX, float expected)
     {
-        // Edges at 2.4 and 5.6: centres 2.5..5.5 are inside, so pixels 2..5 in each direction.
-        // Edges at 2.6 and 5.4 exclude centres 2.5 and 5.5, leaving pixels 3..4.
-        Assert.Equal(Pixels(2, 2, 6, 6), Filled(Rasterizer.Rasterize(Rect(2.4f, 2.4f, 5.6f, 5.6f), 10, 10)));
-        Assert.Equal(Pixels(3, 3, 5, 5), Filled(Rasterizer.Rasterize(Rect(2.6f, 2.6f, 5.4f, 5.4f), 10, 10)));
+        var mask = Rasterizer.Rasterize(Rect(edgeX, 0, 6, 4), 10, 10);
+
+        for (var y = 0; y < 4; y++)
+        {
+            Assert.Equal(expected, mask[2, y]);
+            Assert.Equal(1f, mask[3, y]);
+        }
     }
 
     [Fact]
-    public void Triangle_fills_pixels_under_the_diagonal()
+    public void Corner_pixel_coverage_is_the_product_of_both_edges()
     {
-        // Right triangle (0,0) (4,0) (0,4): pixel centre (x+.5, y+.5) is inside when x + y + 1 < 4.
+        var mask = Rasterizer.Rasterize(Rect(2.5f, 2.5f, 6, 6), 10, 10);
+
+        Assert.Equal(0.25f, mask[2, 2]);  // half in x × half in y
+        Assert.Equal(0.5f, mask[2, 4]);   // half in x only
+        Assert.Equal(0.5f, mask[4, 2]);   // half in y only
+        Assert.Equal(1f, mask[4, 4]);
+    }
+
+    [Fact]
+    public void Sliver_thinner_than_a_pixel_still_shows()
+    {
+        var mask = Rasterizer.Rasterize(Rect(2, 0, 2.25f, 4), 10, 10);
+
+        Assert.Equal(Pixels(2, 0, 3, 4), Filled(mask));
+        Assert.All(mask.Coverage, c => Assert.Equal(0.25f, c));
+    }
+
+    [Fact]
+    public void Triangle_coverage_matches_its_area()
+    {
+        // Right triangle (0,0) (4,0) (0,4): area 8 px². The diagonal cuts through pixels, giving partial coverage.
         Edge[] triangle = [new(0, 0, 4, 0), new(4, 0, 0, 4), new(0, 4, 0, 0)];
 
-        var filled = Filled(Rasterizer.Rasterize(triangle, 10, 10));
+        var mask = Rasterizer.Rasterize(triangle, 10, 10);
 
-        var expected = Pixels(0, 0, 4, 4).Where(p => p.Item1 + p.Item2 + 1 < 4).ToHashSet();
-        Assert.Equal(expected, filled);
+        // True area is 8, but the diagonal x + y = 4 passes exactly through 16 of the 256 samples
+        // (sub-sample indices i + j = 15), which the half-open rule counts as outside: 120 / 16 = 7.5.
+        // A diagonal aligned with the sample grid is the worst case for 4×4 supersampling.
+        Assert.Equal(7.5f, mask.Coverage.Sum(), 0.001f);
+        Assert.Equal(1f, mask[0, 0]);                  // well inside
+        Assert.InRange(mask[1, 2], 0.01f, 0.99f);      // on the diagonal
+        Assert.Equal(0f, mask[3, 3]);                  // outside
+    }
+
+    [Fact]
+    public void Overlapping_shapes_do_not_exceed_full_coverage()
+    {
+        // Winding 2 in the overlap still counts each sample once.
+        var edges = Rect(1, 1, 5.5f, 5.5f).Concat(Rect(3.5f, 3.5f, 7, 7)).ToArray();
+
+        var mask = Rasterizer.Rasterize(edges, 10, 10);
+
+        Assert.Equal(1f, mask[4, 4]);
+        Assert.All(mask.Coverage, c => Assert.InRange(c, 0f, 1f));
+    }
+
+    [Fact]
+    public void Real_glyph_has_full_and_partial_coverage_all_within_range()
+    {
+        var font = new SixLaborsFontSource(TestPaths.Font("DejaVuSans.ttf"));
+        var glyph = font.GetGlyph('@');
+        var scale = 48f / font.Metrics.UnitsPerEm;
+
+        var mask = Rasterizer.Rasterize(PathFlattener.Flatten(glyph, scale, 0, 48), 100, 100);
+
+        Assert.All(mask.Coverage, c => Assert.InRange(c, 0f, 1f));
+        Assert.Contains(mask.Coverage, c => c == 1f);
+        Assert.Contains(mask.Coverage, c => c is > 0f and < 1f);
     }
 
     [Fact]

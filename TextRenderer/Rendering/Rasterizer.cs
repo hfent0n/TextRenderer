@@ -2,10 +2,16 @@ namespace TextRenderer.Rendering;
 
 /// <summary>
 /// Fills closed paths (as pixel-space edges) using a scanline sweep and the non-zero winding rule.
-/// Currently one sample per pixel, at its centre: coverage is 0 or 1.
+/// Anti-aliased by supersampling: each pixel is sampled on a <see cref="Samples"/> × <see cref="Samples"/>
+/// grid (each sample at the centre of its sub-cell), and coverage is the fraction of samples inside.
 /// </summary>
 public static class Rasterizer
 {
+    /// <summary>Samples per pixel along each axis.</summary>
+    public const int Samples = 4;
+
+    private const float SampleCoverage = 1f / (Samples * Samples);
+
     /// <summary>
     /// Rasterizes <paramref name="edges"/> into a mask covering their pixel bounding box,
     /// clipped to <c>[0, clipWidth) × [0, clipHeight)</c>.
@@ -36,8 +42,9 @@ public static class Rasterizer
         var crossings = new List<(float X, int Winding)>();
 
         for (var row = 0; row < height; row++)
+        for (var sub = 0; sub < Samples; sub++)
         {
-            var sampleY = top + row + 0.5f;
+            var sampleY = top + row + (sub + 0.5f) / Samples;
 
             crossings.Clear();
             foreach (var e in edges)
@@ -57,19 +64,22 @@ public static class Rasterizer
             {
                 winding += crossings[i].Winding;
                 if (winding != 0)
-                    FillSpan(coverage, row * width, left, width, crossings[i].X, crossings[i + 1].X);
+                    AccumulateSpan(coverage, row * width, left, width, crossings[i].X, crossings[i + 1].X);
             }
         }
 
         return new CoverageMask(left, top, width, height, coverage);
     }
 
-    /// <summary>Fills pixels whose centre lies in <c>[fromX, toX)</c>.</summary>
-    private static void FillSpan(float[] coverage, int rowStart, int left, int width, float fromX, float toX)
+    /// <summary>
+    /// Adds coverage for every horizontal sample whose position lies in <c>[fromX, toX)</c>.
+    /// Sample <c>k</c> (counted across the whole row) sits at <c>(k + 0.5) / Samples</c>.
+    /// </summary>
+    private static void AccumulateSpan(float[] coverage, int rowStart, int left, int width, float fromX, float toX)
     {
-        var first = Math.Max(0, (int)MathF.Ceiling(fromX - 0.5f) - left);
-        var last = Math.Min(width, (int)MathF.Ceiling(toX - 0.5f) - left);
-        for (var x = first; x < last; x++)
-            coverage[rowStart + x] = 1;
+        var first = Math.Max(left * Samples, (int)MathF.Ceiling(fromX * Samples - 0.5f));
+        var end = Math.Min((left + width) * Samples, (int)MathF.Ceiling(toX * Samples - 0.5f));
+        for (var k = first; k < end; k++)
+            coverage[rowStart + k / Samples - left] += SampleCoverage;
     }
 }
