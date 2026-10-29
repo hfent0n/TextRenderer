@@ -54,6 +54,14 @@ public sealed class Canvas
         Pixels[i + 2] = Mix(Pixels[i + 2], colour.B, a);
     }
 
+    /// <summary>Blends <paramref name="colour"/> through every pixel of <paramref name="mask"/>.</summary>
+    public void Blend(CoverageMask mask, Color colour)
+    {
+        for (var y = 0; y < mask.Height; y++)
+        for (var x = 0; x < mask.Width; x++)
+            Blend(mask.OffsetX + x, mask.OffsetY + y, mask.Coverage[y * mask.Width + x], colour);
+    }
+
     public Color GetPixel(int x, int y)
     {
         var i = (y * Width + x) * BytesPerPixel;

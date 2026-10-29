@@ -26,4 +26,30 @@ public class VisualOutputTests
 
         Assert.True(new FileInfo(path).Length > 0);
     }
+
+    [Theory]
+    [InlineData('H')]
+    [InlineData('o')]
+    public void Writes_single_glyph_ppm(char character)
+    {
+        const float fontSize = 96;
+        const int padding = 8;
+        var font = new SixLaborsFontSource(TestPaths.Font("DejaVuSans.ttf"));
+        var glyph = font.GetGlyph(character);
+        var scale = fontSize / font.Metrics.UnitsPerEm;
+
+        // Minimal stand-in for TextLayout (step 4): one glyph, pen at the left padding.
+        var width = (int)MathF.Ceiling(glyph.AdvanceWidth * scale) + 2 * padding;
+        var height = (int)MathF.Ceiling((font.Metrics.Ascender - font.Metrics.Descender) * scale) + 2 * padding;
+        var baseline = padding + font.Metrics.Ascender * scale;
+
+        var canvas = new Canvas(width, height, Color.White);
+        var edges = PathFlattener.Flatten(glyph, scale, padding, baseline);
+        canvas.Blend(Rasterizer.Rasterize(edges, width, height), Color.Black);
+
+        var path = TestPaths.Output($"glyph-{character}.ppm");
+        File.WriteAllBytes(path, new PpmEncoder().Encode(canvas));
+
+        Assert.True(new FileInfo(path).Length > 0);
+    }
 }

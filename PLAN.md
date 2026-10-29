@@ -16,6 +16,8 @@ SixLabors.Fonts is used **only** to parse the font (metrics + glyph outlines). L
 7. **Colours use `System.Drawing.Color`.**
 8. **The canvas is always opaque** (alpha 255). Transparent backgrounds can come later with PNG.
 9. **Images for visual checks go in `out/`** at the repo root. They're committed (not gitignored) for now, so some example output is in source control.
+10. **Curves are flattened adaptively.** Segments per curve = `clamp(ceil(sqrt(controlPolygonLength / 0.2px)), 1, 64)`, so small text uses few lines and large text stays smooth.
+11. **The rasterizer returns a `CoverageMask`** (offset, size, `float[]` coverage over the glyph's pixel bounding box, clipped to the canvas). The caller blends it onto the `Canvas`. This keeps the rasterizer testable on its own and lets glyph masks be cached in Job 2.
 
 ## Location
 
