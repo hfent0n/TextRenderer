@@ -21,6 +21,9 @@ Job 1 (rendering core, its decisions and its tests) is in [PLAN_PART_1.md](PLAN_
 9. **Font IDs come from font metadata:** family name, plus the style if it isn't Regular, lower-cased with spaces as hyphens. "DejaVu Sans Mono" → `dejavu-sans-mono`; a bold file → `dejavu-sans-bold`.
 10. **Font loading fails fast.** The service refuses to start if the font directory is missing or has no fonts, if any file can't be parsed, or if two files produce the same ID.
 11. **Fonts are copied into the build output.** The `.csproj` copies `../fonts/*.ttf` to `bin/.../fonts`, and `FontDirectory` (default `fonts`) resolves relative to the app's base directory, so `dotnet run`, tests and `WebApplicationFactory` all find them the same way.
+12. **Character errors are capped at 20.** The first 20 distinct offending characters are listed (with code points), then "…and N more".
+13. **Invisible formatting characters are rejected** along with control characters: Unicode category Cf as well as Cc (zero-width space/joiner, BOM, bidi overrides). With no shaping they do nothing useful, and bidi overrides can make text display differently from what it contains.
+14. **`format` and colour hex digits are case-insensitive** (`PNG`, `#ff00aa`). The `#` and six digits are still required. Font IDs stay exact.
 
 ## API
 
@@ -106,8 +109,8 @@ Checked in this order, collecting all field errors before responding:
 1. Body is valid JSON and within `MaxRequestBodyBytes`.
 2. `font` is present and is a known ID.
 3. `text` is present, non-empty, at most `MaxTextLength` code points.
-4. Every code point in `text` is a valid Unicode scalar value, is not a control character (category `Cc`), and exists in the font (`IFontSource.HasGlyph`). Report each offending character once, with its code point.
-5. `fontSize`, `padding` are within limits; `foreground` / `background` parse as `#RRGGBB`; `format` is `png` or `ppm`.
+4. Every code point in `text` is a valid Unicode scalar value (an unpaired surrogate is rejected explicitly, since .NET would otherwise turn it into U+FFFD, which DejaVu can render), is not a control or formatting character (categories `Cc` and `Cf`, decision 13), and exists in the font (`IFontSource.HasGlyph`). Report each offending character once, with its code point, up to 20 (decision 12).
+5. `fontSize`, `padding` are within limits; `foreground` / `background` parse as `#RRGGBB`; `format` is `png` or `ppm` (any case, decision 14).
 6. After layout: `width × height ≤ MaxCanvasPixels`.
 
 Space (U+0020) is allowed. Other whitespace such as tab or newline is a control character and rejected.
