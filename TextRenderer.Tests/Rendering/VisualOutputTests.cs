@@ -32,24 +32,30 @@ public class VisualOutputTests
     [InlineData('o')]
     public void Writes_single_glyph_ppm(char character)
     {
-        const float fontSize = 96;
-        const int padding = 8;
-        var font = new SixLaborsFontSource(TestPaths.Font("DejaVuSans.ttf"));
-        var glyph = font.GetGlyph(character);
-        var scale = fontSize / font.Metrics.UnitsPerEm;
+        var pipeline = new RenderPipeline(new SixLaborsFontSource(TestPaths.Font("DejaVuSans.ttf")));
 
-        // Minimal stand-in for TextLayout (step 4): one glyph, pen at the left padding.
-        var width = (int)MathF.Ceiling(glyph.AdvanceWidth * scale) + 2 * padding;
-        var height = (int)MathF.Ceiling((font.Metrics.Ascender - font.Metrics.Descender) * scale) + 2 * padding;
-        var baseline = padding + font.Metrics.Ascender * scale;
+        var canvas = pipeline.Render(character.ToString(), new RenderOptions { FontSize = 96 });
 
-        var canvas = new Canvas(width, height, Color.White);
-        var edges = PathFlattener.Flatten(glyph, scale, padding, baseline);
-        canvas.Blend(Rasterizer.Rasterize(edges, width, height), Color.Black);
+        Write($"glyph-{character}.ppm", canvas);
+    }
 
-        var path = TestPaths.Output($"glyph-{character}.ppm");
+    [Theory]
+    [InlineData("DejaVuSans.ttf")]
+    [InlineData("DejaVuSansMono.ttf")]
+    [InlineData("DejaVuSerif.ttf")]
+    public void Writes_hello_world_ppm(string fontFile)
+    {
+        var pipeline = new RenderPipeline(new SixLaborsFontSource(TestPaths.Font(fontFile)));
+
+        var canvas = pipeline.Render("Hello, World!", new RenderOptions());
+
+        Write($"hello-{Path.GetFileNameWithoutExtension(fontFile)}.ppm", canvas);
+    }
+
+    private static void Write(string fileName, Canvas canvas)
+    {
+        var path = TestPaths.Output(fileName);
         File.WriteAllBytes(path, new PpmEncoder().Encode(canvas));
-
         Assert.True(new FileInfo(path).Length > 0);
     }
 }

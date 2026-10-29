@@ -18,6 +18,8 @@ SixLabors.Fonts is used **only** to parse the font (metrics + glyph outlines). L
 9. **Images for visual checks go in `out/`** at the repo root. They're committed (not gitignored) for now, so some example output is in source control.
 10. **Curves are flattened adaptively.** Segments per curve = `clamp(ceil(sqrt(controlPolygonLength / 0.2px)), 1, 64)`, so small text uses few lines and large text stays smooth.
 11. **The rasterizer returns a `CoverageMask`** (offset, size, `float[]` coverage over the glyph's pixel bounding box, clipped to the canvas). The caller blends it onto the `Canvas`. This keeps the rasterizer testable on its own and lets glyph masks be cached in Job 2.
+12. **`RenderPipeline` returns a `Canvas`, not bytes.** The caller (tests, CLI, HTTP endpoint) picks an `IImageEncoder`. `IImageEncoder` stays, so the service can offer both PNG and PPM.
+13. **`RenderOptions` has defaults and validates on creation:** `FontSize` 48px, black on white, `Padding` 8px. It throws `ArgumentOutOfRangeException` for `FontSize` ≤ 0 or NaN and for `Padding` < 0. Upper limits wait for Job 2.
 
 ## Location
 
@@ -35,7 +37,7 @@ SixLabors.Fonts is used **only** to parse the font (metrics + glyph outlines). L
 | `FontMetrics` | record | `UnitsPerEm`, `Ascender`, `Descender`, `LineGap` |
 | `Glyph` | record | `AdvanceWidth`, `LeftSideBearing`, `IReadOnlyList<Contour> Contours` (font units) |
 | `Contour` / `PathSegment` | records | Start point plus `Line`, `Quad(control, end)`, `Cubic(c1, c2, end)` segments |
-| `RenderOptions` | record | `FontSize` (px), `Foreground`, `Background`, `Padding` |
+| `RenderOptions` | record | `FontSize` (px, default 48), `Foreground` (black), `Background` (white), `Padding` (8px). Validated on creation |
 | `TextLayout` | class | Text + `IFontSource` + options → `LayoutResult`: `Scale`, `Baseline`, `Width`, `Height`, `IReadOnlyList<PositionedGlyph(Glyph, PenX)>` |
 | `Edge` | record struct | Pixel-space line segment `(x0, y0, x1, y1)` with winding direction |
 | `PathFlattener` | class | `Glyph` + scale + pen origin → `Edge[]`. Applies `px = penX + x·scale`, `py = baseline − y·scale`; subdivides curves into lines |
@@ -43,7 +45,7 @@ SixLabors.Fonts is used **only** to parse the font (metrics + glyph outlines). L
 | `Canvas` | class | `Width`, `Height`, RGBA `byte[]`, `Clear(colour)`, `Blend(x, y, coverage, colour)` |
 | `IImageEncoder` | interface | `byte[] Encode(Canvas)`, `string ContentType` |
 | `PpmEncoder` / `PngEncoder` | classes | PPM (P6) first; PNG (zlib + CRC via `System.IO.Compression`) after |
-| `RenderPipeline` | class | Orchestrator: layout → for each glyph (flatten → rasterize → blend) → encode |
+| `RenderPipeline` | class | Orchestrator, built with an `IFontSource`: `Canvas Render(text, options)` runs layout → for each glyph (flatten → rasterize → blend). Encoding is left to the caller |
 
 ## Pipeline
 
