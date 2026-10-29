@@ -20,6 +20,11 @@ SixLabors.Fonts is used **only** to parse the font (metrics + glyph outlines). L
 11. **The rasterizer returns a `CoverageMask`** (offset, size, `float[]` coverage over the glyph's pixel bounding box, clipped to the canvas). The caller blends it onto the `Canvas`. This keeps the rasterizer testable on its own and lets glyph masks be cached in Job 2.
 12. **`RenderPipeline` returns a `Canvas`, not bytes.** The caller (tests, CLI, HTTP endpoint) picks an `IImageEncoder`. `IImageEncoder` stays, so the service can offer both PNG and PPM.
 13. **`RenderOptions` has defaults and validates on creation:** `FontSize` 48px, black on white, `Padding` 8px. It throws `ArgumentOutOfRangeException` for `FontSize` ≤ 0 or NaN and for `Padding` < 0. Upper limits wait for Job 2.
+14. **PNG output is 8-bit RGB** (colour type 2, no alpha), since the canvas is always opaque.
+15. **PNG rows use the Sub filter** (difference from the pixel to the left). Text images are mostly flat colour, so this compresses far better than no filter. Adaptive per-row filtering can come later.
+16. **PNG uses `CompressionLevel.Fastest`.** CPU per request matters more than a few hundred bytes for a heavily used service.
+17. **CRC32 comes from Microsoft's `System.IO.Hashing` package.**
+18. **Visual outputs in `out/` are PNG only.** The earlier `.ppm` files are removed. PPM stays covered by its unit tests.
 
 ## Location
 
