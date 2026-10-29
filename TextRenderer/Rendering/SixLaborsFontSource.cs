@@ -18,12 +18,21 @@ public sealed class SixLaborsFontSource : IFontSource
     private readonly SLFont _font;
     private readonly GlyphOptions _outlineOptions;
 
-    public SixLaborsFontSource(string path) : this(new FontCollection().Add(path)) { }
+    public SixLaborsFontSource(string path) : this(new FontCollection().Add(path, out var description), description) { }
 
-    public SixLaborsFontSource(Stream stream) : this(new FontCollection().Add(stream)) { }
+    public SixLaborsFontSource(Stream stream) : this(new FontCollection().Add(stream, out var description), description) { }
 
-    private SixLaborsFontSource(FontFamily family)
+    private SixLaborsFontSource(FontFamily family, FontDescription description)
     {
+        FamilyName = description.FontFamilyInvariantCulture;
+        StyleName = description.Style switch
+        {
+            FontStyle.Bold => "Bold",
+            FontStyle.Italic => "Italic",
+            FontStyle.BoldItalic => "Bold Italic",
+            _ => "Regular",
+        };
+
         var unitsPerEm = family.CreateFont(1).FontMetrics.UnitsPerEm;
 
         // Point size == units-per-em at 72 DPI makes 1 output unit == 1 font unit,
@@ -43,6 +52,15 @@ public sealed class SixLaborsFontSource : IFontSource
     }
 
     public FontMetrics Metrics { get; }
+
+    /// <summary>Family name from the font's name table, e.g. "DejaVu Sans Mono".</summary>
+    public string FamilyName { get; }
+
+    /// <summary>"Regular", "Bold", "Italic" or "Bold Italic".</summary>
+    public string StyleName { get; }
+
+    public bool HasGlyph(int codepoint) =>
+        Rune.IsValid(codepoint) && _font.TryGetGlyphId(new CodePoint(codepoint), out _);
 
     public Glyph GetGlyph(int codepoint)
     {

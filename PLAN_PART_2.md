@@ -18,6 +18,9 @@ Job 1 (rendering core, its decisions and its tests) is in [PLAN_PART_1.md](PLAN_
    - 2.2.0 has the same Release-build licence check as 3.x.
    - 2.1.3 has no build-time check, but it's under the **same Six Labors Split License**: it only doesn't enforce it. Its public API also has no per-glyph outline access, so outlines would have to come from SixLabors' own text renderer one character at a time, with its internal line-box offset undone by hand. That's fragile, and it bends Part 1 decision 1.
    - Since there's no deployment, Debug is fine. The write-up should state the licence position. If the service ever ships, either buy a licence or swap `SixLaborsFontSource` for an MIT-licensed parser. `IFontSource` keeps that swap to one class.
+9. **Font IDs come from font metadata:** family name, plus the style if it isn't Regular, lower-cased with spaces as hyphens. "DejaVu Sans Mono" → `dejavu-sans-mono`; a bold file → `dejavu-sans-bold`.
+10. **Font loading fails fast.** The service refuses to start if the font directory is missing or has no fonts, if any file can't be parsed, or if two files produce the same ID.
+11. **Fonts are copied into the build output.** The `.csproj` copies `../fonts/*.ttf` to `bin/.../fonts`, and `FontDirectory` (default `fonts`) resolves relative to the app's base directory, so `dotnet run`, tests and `WebApplicationFactory` all find them the same way.
 
 ## API
 
@@ -53,7 +56,7 @@ Example unsupported-character error:
   "title": "One or more validation errors occurred.",
   "status": 400,
   "errors": {
-    "text": ["Font 'dejavu-sans' has no glyph for U+1F600 '😀'.", "Control character U+000A is not allowed."]
+    "text": ["Font 'dejavu-sans' has no glyph for U+4E2D '中'.", "Control character U+000A is not allowed."]
   }
 }
 ```
@@ -68,7 +71,7 @@ Example unsupported-character error:
 ]
 ```
 
-IDs come from the file name, lower-case and hyphenated (`DejaVuSansMono.ttf` → `dejavu-sans-mono`).
+IDs come from the font's family and style (decision 9).
 
 ### `GET /health`
 
@@ -133,7 +136,7 @@ Must-have first. Everything from step 5 on is cut first if time runs out.
    - 🧪 All Job 1 tests still pass.
 1. **Font registry, `HasGlyph`, glyph cache, limits**
    - 🧪 Registry loads all three fonts with the expected IDs; unknown ID returns false.
-   - 🧪 `HasGlyph` is true for 'A' and 'é', false for U+E000 and U+1F600.
+   - 🧪 `HasGlyph` is true for 'A' and 'é', false for U+E000, U+4E2D '中' and U+1F4A9. (DejaVu Sans *does* have U+1F600 '😀'.)
    - 🧪 `CachingFontSource` returns the same `Glyph` instance on repeat calls and calls the inner source once per code point, including under parallel access.
    - 🧪 `RenderLimits` binds from configuration, and defaults apply when the section is missing.
 2. **Request validation** (no HTTP)

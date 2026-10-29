@@ -101,6 +101,31 @@ public class SixLaborsFontSourceTests
         Assert.Equal(Font(font).GetGlyph('A').AdvanceWidth, source.GetGlyph('A').AdvanceWidth);
     }
 
+    [Theory]
+    [MemberData(nameof(AllFonts))]
+    public void Has_glyph_for_mapped_characters_only(string font)
+    {
+        var source = Font(font);
+
+        Assert.True(source.HasGlyph('A'));
+        Assert.True(source.HasGlyph('é'));
+        Assert.True(source.HasGlyph(' '));
+        Assert.False(source.HasGlyph(0xE000));    // private use
+        Assert.False(source.HasGlyph(0x4E2D));    // 中: CJK, not in DejaVu
+        Assert.False(source.HasGlyph(0x1F4A9));   // emoji outside the Basic Multilingual Plane. (DejaVu Sans does have 😀.)
+        Assert.False(source.HasGlyph(0xD800));    // lone surrogate
+        Assert.False(source.HasGlyph(-1));
+    }
+
+    [Theory]
+    [InlineData("DejaVuSans.ttf", "DejaVu Sans")]
+    [InlineData("DejaVuSansMono.ttf", "DejaVu Sans Mono")]
+    [InlineData("DejaVuSerif.ttf", "DejaVu Serif")]
+    public void Reads_family_and_style_names(string font, string family)
+    {
+        Assert.Equal((family, "Regular"), (Font(font).FamilyName, Font(font).StyleName));
+    }
+
     // --- Font-specific checks ---
 
     [Fact]

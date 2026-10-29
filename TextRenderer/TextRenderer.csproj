@@ -12,4 +12,9 @@
         <PackageReference Include="System.IO.Hashing" Version="10.0.14" />
     </ItemGroup>
 
+    <ItemGroup>
+        <!-- Fonts served by the registry, copied to bin/.../fonts (PLAN_PART_2 decision 11). -->
+        <None Include="..\fonts\*.ttf" Link="fonts\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+
 </Project>

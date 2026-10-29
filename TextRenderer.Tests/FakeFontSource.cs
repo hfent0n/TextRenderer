@@ -25,6 +25,8 @@ public sealed class FakeFontSource : IFontSource
 
     public FontMetrics Metrics { get; } = new(64, 48, -16, 0);
 
+    public bool HasGlyph(int codepoint) => Advances.ContainsKey(codepoint);
+
     public Glyph GetGlyph(int codepoint)
     {
         Requested.Add(codepoint);
