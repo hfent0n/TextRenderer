@@ -13,6 +13,9 @@ SixLabors.Fonts is used **only** to parse the font (metrics + glyph outlines). L
 4. **Rasterize per glyph**, then blend each glyph's coverage onto a shared `Canvas` using "over" blending (`dst = dst·(1−a) + colour·a`) so overlapping glyph boxes don't darken.
 5. **Single line only.** Newlines are out of scope for now.
 6. **Don't name anything `TextRenderer`.** It clashes with the project namespace and with the SixLabors type. The orchestrator is `RenderPipeline`.
+7. **Colours use `System.Drawing.Color`.**
+8. **The canvas is always opaque** (alpha 255). Transparent backgrounds can come later with PNG.
+9. **Images for visual checks go in `out/`** at the repo root. They're committed (not gitignored) for now, so some example output is in source control.
 
 ## Location
 
