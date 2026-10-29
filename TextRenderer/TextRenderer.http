@@ -1,0 +1,6 @@
+@TextRenderer_HostAddress = http://localhost:5133
+
+GET {{TextRenderer_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
