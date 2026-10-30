@@ -30,6 +30,9 @@ public sealed class RenderLimits
     /// <summary>Seconds sent in the <c>Retry-After</c> header of a 429 response.</summary>
     public int RetryAfterSeconds { get; set; } = 1;
 
+    /// <summary>Total size of rendered images kept in memory.</summary>
+    public long MaxCacheBytes { get; set; } = 64 * 1024 * 1024;
+
     /// <summary>Font directory; relative paths resolve against the app's base directory.</summary>
     public string FontDirectory { get; set; } = "fonts";
 
@@ -54,6 +57,7 @@ public sealed class RenderLimits
         Require(RenderTimeout > TimeSpan.Zero, $"{nameof(RenderTimeout)} must be positive.");
         Require(MaxConcurrentRenders > 0, $"{nameof(MaxConcurrentRenders)} must be positive.");
         Require(MaxQueuedRenders >= 0, $"{nameof(MaxQueuedRenders)} must not be negative.");
+        Require(MaxCacheBytes > 0, $"{nameof(MaxCacheBytes)} must be positive.");
         Require(RetryAfterSeconds > 0, $"{nameof(RetryAfterSeconds)} must be positive.");
         Require(!string.IsNullOrWhiteSpace(FontDirectory), $"{nameof(FontDirectory)} is required.");
         return errors;

@@ -31,6 +31,8 @@ Job 1 (rendering core, its decisions and its tests) is in [PLAN_PART_1.md](PLAN_
 19. **The render timeout counts render time only.** The clock starts once a request has a slot; time queued is bounded by `MaxQueuedRenders` instead. Cancellation is checked per glyph in both layout and rendering.
 20. **`Retry-After` on `429` is configurable**: `RetryAfterSeconds`, default 1.
 21. **PNG is the only output format.** PPM was a stepping stone. This removes the `format` field, `PpmEncoder` and `IImageEncoder`, replacing decision 5 here and decision 12 in Part 1.
+22. **Repeat requests are served from a byte-bounded memory cache, with `ETag` and `304` on top.** `POST` responses aren't cached by standard HTTP caches, so the memory cache is what helps callers who change nothing. Cached answers need no render slot. Validation still runs first.
+23. **Cache keys include the build ID and a hash of the font file**, so a rebuild or font change invalidates them with nothing to remember.
 
 ## API
 
@@ -51,7 +53,8 @@ Responses:
 
 | Status | When | Body |
 |---|---|---|
-| `200` | Rendered | PNG bytes, `Content-Type: image/png` |
+| `200` | Rendered or cached | PNG bytes, `Content-Type: image/png`, `ETag` |
+| `304` | `If-None-Match` matches the image's `ETag` | Empty |
 | `400` | Malformed JSON, unknown property, missing/invalid field, unknown font, unsupported characters, limit exceeded | `ProblemDetails` with an `errors` map per field |
 | `413` | Body larger than the limit | `ProblemDetails` |
 | `415` | `Content-Type` isn't `application/json` (decision 17) | `ProblemDetails` |
@@ -106,6 +109,7 @@ Bound from `appsettings.json` → `Render` into a `RenderLimits` options class. 
 | `MaxConcurrentRenders` | number of CPU cores | Rendering is CPU-bound |
 | `MaxQueuedRenders` | 100 | Beyond this, `429` |
 | `RetryAfterSeconds` | 1 | `Retry-After` header on `429` (decision 20) |
+| `MaxCacheBytes` | 64 MB | Total rendered images kept in memory |
 | `FontDirectory` | `fonts` | |
 
 The canvas size check runs **after layout and before the canvas is allocated**, so an oversized request costs almost nothing.
@@ -176,9 +180,7 @@ Must-have first. Everything from step 5 on is cut first if time runs out.
 7. **Concurrency and load testing**
    - ✅ **Concurrency (done early, in `ConcurrencyTests`):** 200 parallel `POST /render` requests across all fonts and sizes, from cold glyph caches, return bytes identical to the same requests made one at a time, with and without overload; one `SixLaborsFontSource` shared by 16 threads gives the same glyphs as one thread; `RenderGate` reaches but never exceeds its limit.
    - ✅ **Load test:** `TextRenderer.LoadTests` (NBomber console project, not part of `dotnet test`). Results are in [LOAD_TEST_RESULTS.md](LOAD_TEST_RESULTS.md): memory stayed flat and overload produced `429`s, not errors.
-8. **Could-have: response caching**
-   - Rendering is deterministic, so identical requests can return a strong `ETag` (hash of the normalised request) and honour `If-None-Match` with `304`, and/or keep a small in-memory LRU of encoded images.
-   - 🧪 Repeat request with `If-None-Match` returns `304` and no body.
+8. ✅ **Response caching:** `RenderCache` (decisions 22 and 23), tested in `CachingTests`.
 
 ## Cleanup
 

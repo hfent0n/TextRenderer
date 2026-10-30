@@ -8,6 +8,8 @@ dotnet run --project TextRenderer.LoadTests -- http://localhost:5133
 
 **Setup:** 10-core Mac on mains power, lid open, no sleep during the runs. Load generator and service on the same machine. Service run as a **Debug** build (Part 2, decision 8) in `Production` mode, with logs discarded and default limits (10 concurrent renders, queue of 100, 5 s timeout).
 
+> **These results predate the cleanup and the response cache.** Every scenario repeats the same few requests, so a re-run now would mostly measure cache hits. To measure rendering again, the harness would need to vary its requests.
+
 ## Results
 
 | Scenario | Clients | Seconds | OK/s | p50 ms | p95 ms | p99 ms | Max ms | OK | Other responses |

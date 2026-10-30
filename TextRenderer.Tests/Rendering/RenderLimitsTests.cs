@@ -90,6 +90,7 @@ public class RenderLimitsTests
         { "MaxConcurrentRenders=0", "MaxConcurrentRenders must be positive." },
         { "MaxQueuedRenders=-1", "MaxQueuedRenders must not be negative." },
         { "RetryAfterSeconds=0", "RetryAfterSeconds must be positive." },
+        { "MaxCacheBytes=0", "MaxCacheBytes must be positive." },
         { "FontDirectory= ", "FontDirectory is required." },
     };
 

@@ -11,10 +11,12 @@ public sealed partial class RenderTelemetry
     public const string MeterName = "TextRenderer";
     public const string RenderDurationMetric = "textrenderer.render.duration";
     public const string QueueDurationMetric = "textrenderer.render.queue.duration";
+    public const string CacheHitsMetric = "textrenderer.render.cache.hits";
 
     private readonly ILogger<RenderTelemetry> _logger;
     private readonly Histogram<double> _renderDuration;
     private readonly Histogram<double> _queueDuration;
+    private readonly Counter<long> _cacheHits;
 
     public RenderTelemetry(ILogger<RenderTelemetry> logger, IMeterFactory meters)
     {
@@ -22,6 +24,7 @@ public sealed partial class RenderTelemetry
         var meter = meters.Create(MeterName);
         _renderDuration = meter.CreateHistogram<double>(RenderDurationMetric, "s", "Time spent rendering and encoding, excluding the queue.");
         _queueDuration = meter.CreateHistogram<double>(QueueDurationMetric, "s", "Time spent waiting for a render slot.");
+        _cacheHits = meter.CreateCounter<long>(CacheHitsMetric, description: "Requests answered without rendering.");
     }
 
     public void Rendered(RenderJob job, int width, int height, TimeSpan queued, TimeSpan rendered)
@@ -44,6 +47,12 @@ public sealed partial class RenderTelemetry
 
     public void Rejected(int status, int errorCount) => LogRejected(status, errorCount);
 
+    public void CacheHit(RenderJob job, int status)
+    {
+        _cacheHits.Add(1, new KeyValuePair<string, object?>("status", status));
+        LogCacheHit(job.FontId, job.Options.FontSize, TextLength(job), status);
+    }
+
     private void Record(RenderJob job, string outcome, TimeSpan queued, TimeSpan rendered)
     {
         _queueDuration.Record(queued.TotalSeconds);
@@ -65,6 +74,10 @@ public sealed partial class RenderTelemetry
     [LoggerMessage(Level = LogLevel.Warning,
         Message = "Render rejected, queue full: {Font} at {FontSize}px, {TextLength} characters, waited {QueueMs:0.0}ms")]
     private partial void LogOverloaded(string font, float fontSize, int textLength, double queueMs);
+
+    [LoggerMessage(Level = LogLevel.Information,
+        Message = "Answered without rendering: {Font} at {FontSize}px, {TextLength} characters, status {Status}")]
+    private partial void LogCacheHit(string font, float fontSize, int textLength, int status);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Request rejected with {Status}, error count {ErrorCount}")]
     private partial void LogRejected(int status, int errorCount);

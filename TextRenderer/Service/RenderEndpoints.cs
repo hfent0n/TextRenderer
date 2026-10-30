@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Options;
+using Microsoft.Net.Http.Headers;
 using TextRenderer.Rendering;
 
 namespace TextRenderer.Service;
@@ -23,6 +24,7 @@ public static partial class RenderEndpoints
             .WithSummary("Render a single line of text in a registered font.")
             .Accepts<RenderRequest>("application/json")
             .Produces(StatusCodes.Status200OK, contentType: PngEncoder.ContentType)
+            .Produces(StatusCodes.Status304NotModified)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status413PayloadTooLarge)
             .ProducesProblem(StatusCodes.Status415UnsupportedMediaType)
@@ -35,7 +37,7 @@ public static partial class RenderEndpoints
     }
 
     private static async Task<IResult> RenderAsync(
-        HttpRequest http, RenderRequestValidator validator, RenderGate gate, RenderTelemetry telemetry,
+        HttpRequest http, RenderRequestValidator validator, RenderGate gate, RenderCache cache, RenderTelemetry telemetry,
         IOptions<RenderLimits> limits, CancellationToken cancellationToken)
     {
         IResult Problem(int status, string title, string detail)
@@ -78,6 +80,21 @@ public static partial class RenderEndpoints
 
         var job = result.Job!;
 
+        // A cached image or a 304 needs no render slot.
+        var etag = cache.ETagFor(job);
+        http.HttpContext.Response.Headers.ETag = etag;
+        if (http.GetTypedHeaders().IfNoneMatch.Any(t => t.Tag == etag || t.Equals(EntityTagHeaderValue.Any)))
+        {
+            telemetry.CacheHit(job, StatusCodes.Status304NotModified);
+            return Results.StatusCode(StatusCodes.Status304NotModified);
+        }
+
+        if (cache.TryGet(etag, out var cached))
+        {
+            telemetry.CacheHit(job, StatusCodes.Status200OK);
+            return Results.File(cached, PngEncoder.ContentType);
+        }
+
         // Only render + encode needs a slot (decision 18). cancellationToken is RequestAborted,
         // so a client that disconnects while queued leaves the queue.
         var queueStart = Stopwatch.GetTimestamp();
@@ -86,6 +103,7 @@ public static partial class RenderEndpoints
         if (!lease.IsAcquired)
         {
             telemetry.Overloaded(job, queued);
+            http.HttpContext.Response.Headers.ETag = default;
             var retryAfter = limits.Value.RetryAfterSeconds;
             http.HttpContext.Response.Headers.RetryAfter = retryAfter.ToString(CultureInfo.InvariantCulture);
             return Results.Problem(
@@ -103,12 +121,14 @@ public static partial class RenderEndpoints
             var canvas = RenderPipeline.Draw(job.Layout, job.Options, timeout.Token);
             timeout.Token.ThrowIfCancellationRequested();
             var image = PngEncoder.Encode(canvas);
+            cache.Set(etag, image);
             telemetry.Rendered(job, canvas.Width, canvas.Height, queued, Stopwatch.GetElapsedTime(renderStart));
             return Results.File(image, PngEncoder.ContentType);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             telemetry.TimedOut(job, queued, Stopwatch.GetElapsedTime(renderStart));
+            http.HttpContext.Response.Headers.ETag = default;
             return Results.Problem(
                 statusCode: StatusCodes.Status503ServiceUnavailable,
                 title: "Render timed out",
