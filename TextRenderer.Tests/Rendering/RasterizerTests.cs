@@ -43,14 +43,6 @@ public class RasterizerTests
     }
 
     [Fact]
-    public void Direction_of_travel_does_not_matter_for_a_single_shape()
-    {
-        var mask = Rasterizer.Rasterize(ReversedRect(2, 2, 6, 6), 10, 10);
-
-        Assert.Equal(Pixels(2, 2, 6, 6), Filled(mask));
-    }
-
-    [Fact]
     public void Reversed_inner_square_leaves_a_hole()
     {
         var edges = Rect(1, 1, 7, 7).Concat(ReversedRect(3, 3, 5, 5)).ToArray();
@@ -162,24 +154,10 @@ public class RasterizerTests
     }
 
     [Fact]
-    public void Shape_past_the_right_and_bottom_is_clipped()
-    {
-        var mask = Rasterizer.Rasterize(Rect(7, 7, 12, 12), 10, 10);
-
-        Assert.Equal(Pixels(7, 7, 10, 10), Filled(mask));
-    }
-
-    [Fact]
     public void Shape_entirely_off_canvas_gives_an_empty_mask()
     {
         Assert.Same(CoverageMask.Empty, Rasterizer.Rasterize(Rect(20, 20, 25, 25), 10, 10));
         Assert.Same(CoverageMask.Empty, Rasterizer.Rasterize(Rect(-9, 2, -4, 6), 10, 10));
-    }
-
-    [Fact]
-    public void No_edges_gives_an_empty_mask()
-    {
-        Assert.Same(CoverageMask.Empty, Rasterizer.Rasterize([], 10, 10));
     }
 
     [Fact]

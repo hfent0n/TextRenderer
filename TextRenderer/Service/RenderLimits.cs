@@ -1,4 +1,4 @@
-namespace TextRenderer.Rendering;
+namespace TextRenderer.Service;
 
 /// <summary>Service limits, bound from the <c>Render</c> section of configuration.</summary>
 public sealed class RenderLimits

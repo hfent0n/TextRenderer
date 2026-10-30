@@ -48,7 +48,7 @@ public sealed class SixLaborsFontSource : IFontSource
         };
 
         var h = _font.FontMetrics.HorizontalMetrics;
-        Metrics = new FontMetrics(unitsPerEm, h.Ascender, h.Descender, h.LineGap);
+        Metrics = new FontMetrics(unitsPerEm, h.Ascender, h.Descender);
     }
 
     public FontMetrics Metrics { get; }
@@ -75,6 +75,6 @@ public sealed class SixLaborsFontSource : IFontSource
         var collector = new OutlineCollector();
         SLGlyphRenderer.RenderTo(collector, glyphId, _outlineOptions);
 
-        return new Glyph(glyphId, metrics?.AdvanceWidth ?? 0, metrics?.LeftSideBearing ?? 0, collector.Contours);
+        return new Glyph(glyphId, metrics?.AdvanceWidth ?? 0, collector.Contours);
     }
 }

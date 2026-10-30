@@ -119,7 +119,7 @@ public class ConcurrencyTests(WebApplicationFactory<Program> factory) : IClassFi
     }
 
     private static string Describe(Glyph glyph) =>
-        $"{glyph.GlyphId}/{glyph.AdvanceWidth}/{glyph.LeftSideBearing}:" +
+        $"{glyph.GlyphId}/{glyph.AdvanceWidth}:" +
         string.Join(";", glyph.Contours.Select(c => c.Start + "|" + string.Join(",", c.Segments)));
 
     [Fact]

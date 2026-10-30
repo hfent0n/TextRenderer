@@ -115,9 +115,9 @@ public class TextLayoutTests
 
     private sealed class BoxFont(float minX, float minY, float maxX, float maxY) : IFontSource
     {
-        public FontMetrics Metrics { get; } = new(64, 48, -16, 0);
+        public FontMetrics Metrics { get; } = new(64, 48, -16);
         public bool HasGlyph(int codepoint) => true;
-        public Glyph GetGlyph(int codepoint) => new(1, 32, 0,
+        public Glyph GetGlyph(int codepoint) => new(1, 32,
         [
             new Contour(new(minX, minY), [new LineSegment(new(maxX, minY)), new LineSegment(new(maxX, maxY)), new LineSegment(new(minX, maxY))]),
         ]);

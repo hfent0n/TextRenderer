@@ -32,9 +32,7 @@ public class RenderRequestValidatorTests
         var job = result.Job!;
         Assert.Equal(("Hello", "dejavu-sans"), (job.Text, job.FontId));
         Assert.Equal(new RenderOptions(), job.Options);
-        Assert.IsType<PngEncoder>(job.Encoder);
-        Assert.True(Fonts.TryGet("dejavu-sans", out var font));
-        Assert.Same(font, job.Font);
+        Assert.Equal(5, job.Layout.Glyphs.Count);
     }
 
     [Fact]
@@ -43,14 +41,13 @@ public class RenderRequestValidatorTests
         var result = Validate(Valid with
         {
             Font = "dejavu-serif", FontSize = 20.5f, Padding = 0,
-            Foreground = "#112233", Background = "#aabbcc", Format = "PPM",
+            Foreground = "#112233", Background = "#aabbcc",
         });
 
         var job = result.Job!;
         Assert.Equal((20.5f, 0), (job.Options.FontSize, job.Options.Padding));
         Assert.Equal(Color.FromArgb(0x11, 0x22, 0x33).ToArgb(), job.Options.Foreground.ToArgb());
         Assert.Equal(Color.FromArgb(0xAA, 0xBB, 0xCC).ToArgb(), job.Options.Background.ToArgb());
-        Assert.IsType<PpmEncoder>(job.Encoder);
     }
 
     [Theory]
@@ -263,24 +260,6 @@ public class RenderRequestValidatorTests
         Assert.Equal(["Colour must be #RRGGBB, e.g. #1A2B3C."], ErrorsFor(Validate(request), field));
     }
 
-    [Theory]
-    [InlineData("png")]
-    [InlineData("PNG")]
-    [InlineData("Ppm")]
-    public void Format_is_case_insensitive(string format)
-    {
-        Assert.True(Validate(Valid with { Format = format }).IsValid);
-    }
-
-    [Theory]
-    [InlineData("jpeg")]
-    [InlineData("")]
-    [InlineData(" png")]
-    public void Unknown_format_is_rejected(string format)
-    {
-        Assert.Equal(["Format must be 'png' or 'ppm'."], ErrorsFor(Validate(Valid with { Format = format }), "format"));
-    }
-
     // --- canvas size ---
 
     [Fact]
@@ -308,9 +287,9 @@ public class RenderRequestValidatorTests
     {
         var limits = new RenderLimits { MaxCanvasPixels = 1 };
 
-        var result = Validate(Valid with { Format = "gif" }, limits);
+        var result = Validate(Valid with { Padding = -1 }, limits);
 
-        Assert.Equal(["format"], result.Errors.Keys);
+        Assert.Equal(["padding"], result.Errors.Keys);
     }
 
     // --- combined ---
@@ -321,10 +300,10 @@ public class RenderRequestValidatorTests
         var result = Validate(new RenderRequest
         {
             Text = "", Font = "nope", FontSize = 0, Padding = -1,
-            Foreground = "x", Background = "y", Format = "gif",
+            Foreground = "x", Background = "y",
         });
 
         Assert.Null(result.Job);
-        Assert.Equal(["background", "font", "fontSize", "foreground", "format", "padding", "text"], result.Errors.Keys.Order());
+        Assert.Equal(["background", "font", "fontSize", "foreground", "padding", "text"], result.Errors.Keys.Order());
     }
 }

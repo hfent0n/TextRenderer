@@ -27,7 +27,7 @@ public static class GoldenImage
         File.Delete(actualPath);
         File.Delete(diffPath);
 
-        var png = new PngEncoder().Encode(canvas);
+        var png = PngEncoder.Encode(canvas);
 
         if (Environment.GetEnvironmentVariable("UPDATE_GOLDEN") == "1")
         {

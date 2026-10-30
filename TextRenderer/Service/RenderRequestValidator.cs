@@ -7,7 +7,7 @@ using static System.FormattableString;
 namespace TextRenderer.Service;
 
 /// <summary>A validated request, ready to render.</summary>
-public sealed record RenderJob(string Text, string FontId, IFontSource Font, RenderOptions Options, IImageEncoder Encoder);
+public sealed record RenderJob(string Text, string FontId, RenderOptions Options, LayoutResult Layout);
 
 /// <summary>Either a <see cref="RenderJob"/> or validation errors keyed by JSON field name.</summary>
 public sealed record RenderValidationResult(RenderJob? Job, IReadOnlyDictionary<string, string[]> Errors)
@@ -23,9 +23,6 @@ public sealed class RenderRequestValidator(FontRegistry fonts, RenderLimits limi
 {
     /// <summary>At most this many offending characters are listed (PLAN_PART_2 decision 12).</summary>
     public const int MaxCharacterErrors = 20;
-
-    private static readonly IImageEncoder Png = new PngEncoder();
-    private static readonly IImageEncoder Ppm = new PpmEncoder();
 
     public RenderValidationResult Validate(RenderRequest request)
     {
@@ -66,15 +63,6 @@ public sealed class RenderRequestValidator(FontRegistry fonts, RenderLimits limi
         if (request.Background is not null && !ColourParser.TryParse(request.Background, out background))
             Add("background", "Colour must be #RRGGBB, e.g. #1A2B3C.");
 
-        IImageEncoder? encoder = (request.Format ?? "png").ToLowerInvariant() switch
-        {
-            "png" => Png,
-            "ppm" => Ppm,
-            _ => null,
-        };
-        if (encoder is null)
-            Add("format", "Format must be 'png' or 'ppm'.");
-
         if (errors.Count == 0)
         {
             var options = new RenderOptions
@@ -92,7 +80,7 @@ public sealed class RenderRequestValidator(FontRegistry fonts, RenderLimits limi
                 Add("canvas", Invariant($"The image would be {layout.Width}×{layout.Height} = {pixels:N0} pixels; ") +
                               Invariant($"the maximum is {limits.MaxCanvasPixels:N0}. Use shorter text or a smaller font size."));
             else
-                return new RenderValidationResult(new RenderJob(request.Text!, request.Font!, font!, options, encoder!), new Dictionary<string, string[]>());
+                return new RenderValidationResult(new RenderJob(request.Text!, request.Font!, options, layout), new Dictionary<string, string[]>());
         }
 
         return new RenderValidationResult(null, errors.ToDictionary(e => e.Key, e => e.Value.ToArray()));

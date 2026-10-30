@@ -6,7 +6,7 @@ namespace TextRenderer.Rendering;
 /// A glyph's outline and horizontal metrics in font units (Y-up, baseline at 0).
 /// Independent of font size, so it can be cached per (font, glyph).
 /// </summary>
-public sealed record Glyph(int GlyphId, int AdvanceWidth, int LeftSideBearing, IReadOnlyList<Contour> Contours)
+public sealed record Glyph(int GlyphId, int AdvanceWidth, IReadOnlyList<Contour> Contours)
 {
     /// <summary>Outline bounds in font units, or null if the glyph has no outline (e.g. a space).</summary>
     public GlyphBounds? Bounds { get; } = GlyphBounds.Of(Contours);

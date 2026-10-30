@@ -12,5 +12,4 @@ public sealed record RenderRequest
     public int? Padding { get; init; }
     public string? Foreground { get; init; }
     public string? Background { get; init; }
-    public string? Format { get; init; }
 }

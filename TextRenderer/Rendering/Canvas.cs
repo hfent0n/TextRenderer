@@ -62,12 +62,6 @@ public sealed class Canvas
             Blend(mask.OffsetX + x, mask.OffsetY + y, mask.Coverage[y * mask.Width + x], colour);
     }
 
-    public Color GetPixel(int x, int y)
-    {
-        var i = (y * Width + x) * BytesPerPixel;
-        return Color.FromArgb(Pixels[i + 3], Pixels[i], Pixels[i + 1], Pixels[i + 2]);
-    }
-
     private static byte Mix(byte dst, byte src, float a) =>
         (byte)MathF.Round(dst + (src - dst) * a);
 }

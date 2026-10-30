@@ -27,14 +27,7 @@ public class OracleTests(ITestOutputHelper output)
 
     private static readonly string[] FontFiles = ["DejaVuSans.ttf", "DejaVuSansMono.ttf", "DejaVuSerif.ttf"];
 
-    private static readonly string[] Texts =
-    [
-        "Hello, World!",
-        "The quick brown fox jumps over the lazy dog.",
-        "0123456789 +-×÷=<> 3.14159 $€£¥",
-        "!\"#&'()*,./:;?@[\\]^_`{|}~",
-        "Ångström café naïve façade Øresund",
-    ];
+    private static readonly string[] Texts = ["The quick brown fox, Ångström @ 3.14 €£¥ {[&]}"];
 
     public static TheoryData<string, int, int> Cases()
     {

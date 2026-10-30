@@ -5,7 +5,7 @@ namespace TextRenderer.Tests.Rendering;
 
 public class PathFlattenerTests
 {
-    private static Glyph GlyphOf(params Contour[] contours) => new(1, 100, 0, contours);
+    private static Glyph GlyphOf(params Contour[] contours) => new(1, 100, contours);
 
     private static Contour Contour(Vector2 start, params PathSegment[] segments) => new(start, segments);
 

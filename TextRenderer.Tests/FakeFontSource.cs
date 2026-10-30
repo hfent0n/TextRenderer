@@ -23,7 +23,7 @@ public sealed class FakeFontSource : IFontSource
 
     public List<int> Requested { get; } = [];
 
-    public FontMetrics Metrics { get; } = new(64, 48, -16, 0);
+    public FontMetrics Metrics { get; } = new(64, 48, -16);
 
     public bool HasGlyph(int codepoint) => Advances.ContainsKey(codepoint);
 
@@ -35,7 +35,7 @@ public sealed class FakeFontSource : IFontSource
             advance = NotDefAdvance;
 
         if (codepoint == ' ')
-            return new Glyph(1, advance, 0, []);
+            return new Glyph(1, advance, []);
 
         var box = new Contour(new Vector2(4, 0),
         [
@@ -43,6 +43,6 @@ public sealed class FakeFontSource : IFontSource
             new LineSegment(new Vector2(advance - 4, 32)),
             new LineSegment(new Vector2(4, 32)),
         ]);
-        return new Glyph(known ? codepoint : 0, advance, 4, [box]);
+        return new Glyph(known ? codepoint : 0, advance, [box]);
     }
 }

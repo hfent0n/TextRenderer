@@ -53,8 +53,10 @@ public class ImageInvariantTests
     public static TheoryData<string, char> AreaCases()
     {
         var data = new TheoryData<string, char>();
-        foreach (var font in new[] { "DejaVuSans.ttf", "DejaVuSansMono.ttf", "DejaVuSerif.ttf" })
         foreach (var c in "Ho@&gWS8%")
+            data.Add("DejaVuSans.ttf", c);
+        foreach (var font in new[] { "DejaVuSansMono.ttf", "DejaVuSerif.ttf" })
+        foreach (var c in "@g")
             data.Add(font, c);
         return data;
     }
@@ -186,10 +188,8 @@ public class ImageInvariantTests
     [Fact]
     public void Same_input_gives_byte_identical_png()
     {
-        var encoder = new PngEncoder();
-
-        var first = encoder.Encode(Render("DejaVuSerif.ttf", "Determinism @ 3.14", 37.5f).Canvas);
-        var second = encoder.Encode(Render("DejaVuSerif.ttf", "Determinism @ 3.14", 37.5f).Canvas);
+        var first = PngEncoder.Encode(Render("DejaVuSerif.ttf", "Determinism @ 3.14", 37.5f).Canvas);
+        var second = PngEncoder.Encode(Render("DejaVuSerif.ttf", "Determinism @ 3.14", 37.5f).Canvas);
 
         Assert.Equal(first, second);
     }

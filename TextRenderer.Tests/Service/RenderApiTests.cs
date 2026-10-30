@@ -44,7 +44,7 @@ public class RenderApiTests(WebApplicationFactory<Program> factory) : IClassFixt
         Assert.Equal("image/png", response.Content.Headers.ContentType?.MediaType);
 
         FontRegistry.Load("fonts").TryGet("dejavu-serif", out var font);
-        var expected = new PngEncoder().Encode(new RenderPipeline(font).Render("Hello, World!", new RenderOptions { FontSize = 32 }));
+        var expected = PngEncoder.Encode(new RenderPipeline(font).Render("Hello, World!", new RenderOptions { FontSize = 32 }));
         Assert.Equal(expected, await response.Content.ReadAsByteArrayAsync());
     }
 
@@ -52,19 +52,15 @@ public class RenderApiTests(WebApplicationFactory<Program> factory) : IClassFixt
     public async Task Applies_every_option()
     {
         var response = await PostJson("""
-            { "text": "Hi", "font": "dejavu-sans-mono", "fontSize": 20, "padding": 0,
-              "foreground": "#ff0000", "background": "#0000FF", "format": "PPM" }
+            { "text": "Hi", "font": "dejavu-sans-mono", "fontSize": 20, "padding": 0, "foreground": "#ff0000", "background": "#0000FF" }
             """);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("image/x-portable-pixmap", response.Content.Headers.ContentType?.MediaType);
-
-        var ppm = await response.Content.ReadAsByteArrayAsync();
-        var header = Encoding.ASCII.GetString(ppm, 0, 2);
-        Assert.Equal("P6", header);
-        var pixels = ppm[^(3 * 2)..];                     // last two pixels of the last row: background
-        Assert.Equal(new byte[] { 0, 0, 255, 0, 0, 255 }, pixels);
-        Assert.Contains(ppm.Chunk(3).Skip(5), p => p is [255, 0, 0]);  // some pure foreground ink
+        FontRegistry.Load("fonts").TryGet("dejavu-sans-mono", out var font);
+        var expected = PngEncoder.Encode(new RenderPipeline(font).Render("Hi", new RenderOptions
+        {
+            FontSize = 20, Padding = 0, Foreground = System.Drawing.Color.FromArgb(255, 0, 0), Background = System.Drawing.Color.FromArgb(0, 0, 255),
+        }));
+        Assert.Equal(expected, await response.Content.ReadAsByteArrayAsync());
     }
 
     [Fact]
@@ -80,44 +76,15 @@ public class RenderApiTests(WebApplicationFactory<Program> factory) : IClassFixt
     [Fact]
     public async Task Validation_errors_are_problem_details_per_field()
     {
-        var response = await PostJson("""{ "text": "a\n中", "font": "dejavu-sans", "fontSize": 0, "format": "gif" }""");
+        var response = await PostJson("""{ "text": "a\n中", "font": "dejavu-sans", "fontSize": 0 }""");
 
         var problem = await Problem(response, HttpStatusCode.BadRequest);
         Assert.Equal("One or more validation errors occurred.", problem.GetProperty("title").GetString());
         var errors = problem.GetProperty("errors");
-        Assert.Equal(["fontSize", "format", "text"], errors.EnumerateObject().Select(p => p.Name).Order());
+        Assert.Equal(["fontSize", "text"], errors.EnumerateObject().Select(p => p.Name).Order());
         Assert.Equal(
             ["Control character U+000A is not allowed.", "Font 'dejavu-sans' has no glyph for U+4E2D '中'."],
             errors.GetProperty("text").EnumerateArray().Select(e => e.GetString()));
-    }
-
-    [Fact]
-    public async Task Missing_required_fields()
-    {
-        var response = await PostJson("{}");
-
-        var problem = await Problem(response, HttpStatusCode.BadRequest);
-        var errors = problem.GetProperty("errors");
-        Assert.Equal("Text is required.", errors.GetProperty("text")[0].GetString());
-        Assert.Equal("Font is required.", errors.GetProperty("font")[0].GetString());
-    }
-
-    [Fact]
-    public async Task Unknown_font()
-    {
-        var errors = await FieldErrors(await PostJson("""{ "text": "Hi", "font": "comic-sans" }"""), "font");
-
-        Assert.Equal(["Unknown font 'comic-sans'. See GET /fonts for available fonts."], errors);
-    }
-
-    [Fact]
-    public async Task Oversized_canvas()
-    {
-        var text = new string('W', 500);
-
-        var errors = await FieldErrors(await PostJson($$"""{ "text": "{{text}}", "font": "dejavu-sans", "fontSize": 512 }"""), "canvas");
-
-        Assert.Single(errors);
     }
 
     [Fact]
@@ -277,7 +244,7 @@ public class RenderApiTests(WebApplicationFactory<Program> factory) : IClassFixt
 
     private sealed class ExplodingFontSource : IFontSource
     {
-        public FontMetrics Metrics { get; } = new(64, 48, -16, 0);
+        public FontMetrics Metrics { get; } = new(64, 48, -16);
         public bool HasGlyph(int codepoint) => true;
         public Glyph GetGlyph(int codepoint) => throw new InvalidOperationException("secret internal detail");
     }

@@ -9,7 +9,7 @@ namespace TextRenderer.Rendering;
 /// Minimal PNG writer: 8-bit RGB (the canvas is opaque), Sub filter on every row,
 /// a single zlib-compressed IDAT chunk.
 /// </summary>
-public sealed class PngEncoder : IImageEncoder
+public static class PngEncoder
 {
     private const int BytesPerPixel = 3;
     private const byte ColourTypeRgb = 2;
@@ -17,9 +17,9 @@ public sealed class PngEncoder : IImageEncoder
 
     private static readonly byte[] Signature = [0x89, (byte)'P', (byte)'N', (byte)'G', 0x0D, 0x0A, 0x1A, 0x0A];
 
-    public string ContentType => "image/png";
+    public const string ContentType = "image/png";
 
-    public byte[] Encode(Canvas canvas)
+    public static byte[] Encode(Canvas canvas)
     {
         using var output = new MemoryStream();
         output.Write(Signature);

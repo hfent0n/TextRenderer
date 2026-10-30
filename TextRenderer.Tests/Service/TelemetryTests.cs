@@ -7,7 +7,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.Metrics.Testing;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Testing;
-using TextRenderer.Rendering;
 using TextRenderer.Service;
 
 namespace TextRenderer.Tests.Service;
@@ -16,16 +15,12 @@ public class TelemetryTests(WebApplicationFactory<Program> factory) : IClassFixt
 {
     private const string Secret = "TOP-SECRET-TEXT";
 
-    private WebApplicationFactory<Program> App(Action<IServiceCollection>? services = null, params (string Key, string Value)[] settings) =>
+    private WebApplicationFactory<Program> App(params (string Key, string Value)[] settings) =>
         factory.WithWebHostBuilder(b =>
         {
             foreach (var (key, value) in settings)
                 b.UseSetting($"Render:{key}", value);
-            b.ConfigureServices(s =>
-            {
-                s.AddFakeLogging();
-                services?.Invoke(s);
-            });
+            b.ConfigureServices(s => s.AddFakeLogging());
         });
 
     private static Task<HttpResponseMessage> Post(WebApplicationFactory<Program> app, string json) =>
@@ -80,13 +75,10 @@ public class TelemetryTests(WebApplicationFactory<Program> factory) : IClassFixt
     [Fact]
     public async Task A_timeout_logs_a_warning_and_records_its_outcome()
     {
-        using var app = App(
-            s => s.AddSingleton(FontRegistry.Create(
-                [(new FontInfo("slow", "Slow", "Regular", 64), new SlowFontSource(TimeSpan.FromMilliseconds(30)))])),
-            ("RenderTimeout", "00:00:00.050"));
+        using var app = App(("RenderTimeout", "00:00:00.001"));
         using var durations = Durations(app);
 
-        var response = await Post(app, """{ "text": "AAAAAAAAAA", "font": "slow", "fontSize": 16 }""");
+        var response = await Post(app, """{ "text": "The quick brown fox jumps over the lazy d", "font": "dejavu-serif", "fontSize": 512 }""");
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         Assert.Equal(LogLevel.Warning, Entry(app).Level);

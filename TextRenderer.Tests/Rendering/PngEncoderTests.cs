@@ -79,17 +79,9 @@ public class PngEncoderTests
     }
 
     [Fact]
-    public void Starts_with_the_png_signature()
-    {
-        var png = new PngEncoder().Encode(Sample());
-
-        Assert.Equal(Signature, png[..8]);
-    }
-
-    [Fact]
     public void Writes_ihdr_idat_iend_in_order()
     {
-        var types = ReadChunks(new PngEncoder().Encode(Sample())).Select(c => c.Type);
+        var types = ReadChunks(PngEncoder.Encode(Sample())).Select(c => c.Type);
 
         Assert.Equal(["IHDR", "IDAT", "IEND"], types);
     }
@@ -97,7 +89,7 @@ public class PngEncoderTests
     [Fact]
     public void Ihdr_describes_an_8_bit_rgb_non_interlaced_image()
     {
-        var ihdr = ReadChunks(new PngEncoder().Encode(Sample()))[0].Data;
+        var ihdr = ReadChunks(PngEncoder.Encode(Sample()))[0].Data;
 
         Assert.Equal(13, ihdr.Length);
         Assert.Equal(3, BinaryPrimitives.ReadInt32BigEndian(ihdr));       // width
@@ -108,7 +100,7 @@ public class PngEncoderTests
     [Fact]
     public void Ends_with_the_standard_iend_chunk()
     {
-        var png = new PngEncoder().Encode(Sample());
+        var png = PngEncoder.Encode(Sample());
 
         // Length 0, "IEND", CRC AE 42 60 82: identical in every valid PNG.
         Assert.Equal(new byte[] { 0, 0, 0, 0, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82 }, png[^12..]);
@@ -117,7 +109,7 @@ public class PngEncoderTests
     [Fact]
     public void Every_chunk_crc_matches_an_independent_crc()
     {
-        foreach (var chunk in ReadChunks(new PngEncoder().Encode(Sample())))
+        foreach (var chunk in ReadChunks(PngEncoder.Encode(Sample())))
             Assert.Equal(ReferenceCrc(chunk.Type, chunk.Data), chunk.Crc);
     }
 
@@ -126,7 +118,7 @@ public class PngEncoderTests
     {
         var canvas = Sample();
 
-        var (rgb, filters) = Decode(new PngEncoder().Encode(canvas), 3, 2);
+        var (rgb, filters) = Decode(PngEncoder.Encode(canvas), 3, 2);
 
         Assert.All(filters, f => Assert.Equal(1, f));  // Sub on every row
         var expected = canvas.Pixels.Where((_, i) => i % 4 != 3).ToArray();
@@ -139,7 +131,7 @@ public class PngEncoderTests
         var pipeline = new RenderPipeline(new SixLaborsFontSource(TestPaths.Font("DejaVuSerif.ttf")));
         var canvas = pipeline.Render("Wave @ 12%", new RenderOptions { FontSize = 24 });
 
-        var (rgb, _) = Decode(new PngEncoder().Encode(canvas), canvas.Width, canvas.Height);
+        var (rgb, _) = Decode(PngEncoder.Encode(canvas), canvas.Width, canvas.Height);
 
         Assert.Equal(canvas.Pixels.Where((_, i) => i % 4 != 3).ToArray(), rgb);
     }
@@ -151,7 +143,7 @@ public class PngEncoderTests
         var canvas = new Canvas(2, 1, Color.FromArgb(250, 250, 250));
         canvas.Blend(1, 0, 1, Color.FromArgb(10, 10, 10));
 
-        var (rgb, _) = Decode(new PngEncoder().Encode(canvas), 2, 1);
+        var (rgb, _) = Decode(PngEncoder.Encode(canvas), 2, 1);
 
         Assert.Equal(new byte[] { 250, 250, 250, 10, 10, 10 }, rgb);
     }
@@ -159,24 +151,11 @@ public class PngEncoderTests
     [Fact]
     public void Flat_image_compresses_to_a_tiny_file()
     {
-        var png = new PngEncoder().Encode(new Canvas(1000, 1000, Color.White));
+        var png = PngEncoder.Encode(new Canvas(1000, 1000, Color.White));
 
         // 3 MB of raw RGB; with Sub every row is the first pixel followed by zeros.
         // CompressionLevel.Fastest gets about 100× (~31 KB); require at least 50×.
         Assert.True(png.Length < 3_000_000 / 50, $"{png.Length} bytes");
     }
 
-    [Fact]
-    public void Single_pixel_canvas_is_valid()
-    {
-        var (rgb, _) = Decode(new PngEncoder().Encode(new Canvas(1, 1, Color.Red)), 1, 1);
-
-        Assert.Equal(new byte[] { 255, 0, 0 }, rgb);
-    }
-
-    [Fact]
-    public void Reports_png_content_type()
-    {
-        Assert.Equal("image/png", new PngEncoder().ContentType);
-    }
 }

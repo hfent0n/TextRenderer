@@ -1,4 +1,5 @@
 using TextRenderer.Rendering;
+using TextRenderer.Service;
 
 namespace TextRenderer.Tests.Rendering;
 

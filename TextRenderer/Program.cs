@@ -21,7 +21,7 @@ builder.Services.AddSingleton(sp => new RenderGate(sp.GetRequiredService<IOption
 
 builder.Services.AddSingleton<RenderTelemetry>();
 
-builder.Services.AddHealthChecks().AddCheck<FontsHealthCheck>("fonts");
+builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 

@@ -12,7 +12,13 @@ public sealed class RenderPipeline(IFontSource font)
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(options);
 
-        var layout = TextLayout.Layout(text, font, options, cancellationToken);
+        return Draw(TextLayout.Layout(text, font, options, cancellationToken), options, cancellationToken);
+    }
+
+    /// <summary>Draws text that has already been laid out.</summary>
+    /// <param name="cancellationToken">Checked before each glyph.</param>
+    public static Canvas Draw(LayoutResult layout, RenderOptions options, CancellationToken cancellationToken = default)
+    {
         var canvas = new Canvas(layout.Width, layout.Height, options.Background);
 
         foreach (var (glyph, penX) in layout.Glyphs)

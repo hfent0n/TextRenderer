@@ -42,7 +42,6 @@ public class SixLaborsFontSourceTests
         var points = Points(h).ToList();
         Assert.Equal(0, points.Min(p => p.Y));
         Assert.InRange(points.Max(p => p.Y), 1, Font(font).Metrics.Ascender);
-        Assert.Equal(h.LeftSideBearing, points.Min(p => p.X));
         Assert.True(points.Max(p => p.X) <= h.AdvanceWidth);
     }
 
@@ -134,9 +133,8 @@ public class SixLaborsFontSourceTests
         var font = Font("DejaVuSans.ttf");
         var h = font.GetGlyph('H');
 
-        Assert.Equal(new FontMetrics(2048, 1901, -483, 0), font.Metrics);
+        Assert.Equal(new FontMetrics(2048, 1901, -483), font.Metrics);
         Assert.Equal(1540, h.AdvanceWidth);  // 201 lsb + 1138 ink + 201 rsb
-        Assert.Equal(201, h.LeftSideBearing);
         Assert.Equal(1493, Points(h).Max(p => p.Y));
     }
 

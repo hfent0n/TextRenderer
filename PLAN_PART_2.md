@@ -10,7 +10,7 @@ Job 1 (rendering core, its decisions and its tests) is in [PLAN_PART_1.md](PLAN_
 2. **Unsupported characters are rejected, not rendered as `.notdef`.** A request containing any character the chosen font has no glyph for, or any control character, gets `400` listing the offending characters. Callers find out immediately rather than shipping images with boxes in them.
 3. **Limits are configurable** through `appsettings.json` (section `Render`), with safe defaults.
 4. **Errors use `ProblemDetails`** (RFC 7807) everywhere, with no stack traces in responses.
-5. **Output format is chosen by a `format` field** (`png` default, or `ppm`), using the existing `IImageEncoder` implementations.
+5. ~~Output format is chosen by a `format` field.~~ Replaced by decision 21.
 6. **The canvas is sized to fit the ink** as well as the advances, so glyphs that overhang their advance (e.g. serif "Å" at `Padding = 0`) are never clipped.
 7. **Rendering is bounded**: a concurrency limiter caps simultaneous renders, and a timeout cancels slow ones.
 
@@ -30,6 +30,7 @@ Job 1 (rendering core, its decisions and its tests) is in [PLAN_PART_1.md](PLAN_
 18. **The concurrency limit wraps only render + encode.** Reading the body, parsing and validation run without a slot, so a slow upload can't hold a render slot and invalid requests get their `400` immediately even under load. Requests queue oldest-first; a client that disconnects while queued leaves the queue.
 19. **The render timeout counts render time only.** The clock starts once a request has a slot; time queued is bounded by `MaxQueuedRenders` instead. Cancellation is checked per glyph in both layout and rendering.
 20. **`Retry-After` on `429` is configurable**: `RetryAfterSeconds`, default 1.
+21. **PNG is the only output format.** PPM was a stepping stone. This removes the `format` field, `PpmEncoder` and `IImageEncoder`, replacing decision 5 here and decision 12 in Part 1.
 
 ## API
 
@@ -45,13 +46,12 @@ Request (`application/json`):
 | `padding` | integer | no | 8 | Pixels, within limits |
 | `foreground` | string | no | `#000000` | `#RRGGBB` |
 | `background` | string | no | `#FFFFFF` | `#RRGGBB` |
-| `format` | string | no | `png` | `png` or `ppm` |
 
 Responses:
 
 | Status | When | Body |
 |---|---|---|
-| `200` | Rendered | Image bytes, `Content-Type: image/png` or `image/x-portable-pixmap` |
+| `200` | Rendered | PNG bytes, `Content-Type: image/png` |
 | `400` | Malformed JSON, unknown property, missing/invalid field, unknown font, unsupported characters, limit exceeded | `ProblemDetails` with an `errors` map per field |
 | `413` | Body larger than the limit | `ProblemDetails` |
 | `415` | `Content-Type` isn't `application/json` (decision 17) | `ProblemDetails` |
@@ -179,6 +179,14 @@ Must-have first. Everything from step 5 on is cut first if time runs out.
 8. **Could-have: response caching**
    - Rendering is deterministic, so identical requests can return a strong `ETag` (hash of the normalised request) and honour `If-None-Match` with `304`, and/or keep a small in-memory LRU of encoded images.
    - 🧪 Repeat request with `If-None-Match` returns `304` and no body.
+
+## Cleanup
+
+Done after step 7, so the load results describe the code before cleanup.
+
+- **Production:** lay text out once and pass it along; make `RenderOptions` a plain record; remove PPM (decision 21), `FontsHealthCheck`, `.otf` support and the unused `LeftSideBearing` and `LineGap`; move `Canvas.GetPixel` to a test helper; use one helper for rejected responses; move `RenderLimits` to `Service/`.
+- **Kept on purpose:** the unknown-property message (its test fails if .NET changes the wording it relies on) and the queue-duration metric.
+- **Tests:** delete `VisualOutputTests` and `out/`; reduce `OracleTests` to 18 cases and shrink the invariant cases; remove overlap between API and validator tests; trim near-duplicates. Re-run the deliberate-bug checks afterwards.
 
 ## Testing summary
 

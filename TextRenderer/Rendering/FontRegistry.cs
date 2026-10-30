@@ -9,8 +9,6 @@ public sealed record FontInfo(string Id, string Family, string Style, int UnitsP
 /// </summary>
 public sealed class FontRegistry
 {
-    private static readonly string[] Extensions = [".ttf", ".otf"];
-
     private readonly Dictionary<string, IFontSource> _sources;
 
     private FontRegistry(Dictionary<string, IFontSource> sources, IReadOnlyList<FontInfo> fonts)
@@ -40,12 +38,9 @@ public sealed class FontRegistry
         if (!Directory.Exists(path))
             throw new InvalidOperationException($"Font directory '{path}' does not exist.");
 
-        var files = Directory.EnumerateFiles(path)
-            .Where(f => Extensions.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase))
-            .Order(StringComparer.Ordinal)
-            .ToList();
+        var files = Directory.EnumerateFiles(path, "*.ttf").Order(StringComparer.Ordinal).ToList();
         if (files.Count == 0)
-            throw new InvalidOperationException($"Font directory '{path}' contains no {string.Join(" or ", Extensions)} files.");
+            throw new InvalidOperationException($"Font directory '{path}' contains no .ttf files.");
 
         var sources = new Dictionary<string, IFontSource>();
         var origins = new Dictionary<string, string>();

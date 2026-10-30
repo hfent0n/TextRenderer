@@ -1,5 +1,5 @@
 using Microsoft.Extensions.Configuration;
-using TextRenderer.Rendering;
+using TextRenderer.Service;
 
 namespace TextRenderer.Tests.Rendering;
 

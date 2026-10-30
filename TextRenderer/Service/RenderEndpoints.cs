@@ -3,7 +3,6 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using TextRenderer.Rendering;
 
@@ -23,7 +22,7 @@ public static partial class RenderEndpoints
             .WithName("Render")
             .WithSummary("Render a single line of text in a registered font.")
             .Accepts<RenderRequest>("application/json")
-            .Produces(StatusCodes.Status200OK, contentType: "image/png", additionalContentTypes: "image/x-portable-pixmap")
+            .Produces(StatusCodes.Status200OK, contentType: PngEncoder.ContentType)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status413PayloadTooLarge)
             .ProducesProblem(StatusCodes.Status415UnsupportedMediaType)
@@ -39,24 +38,26 @@ public static partial class RenderEndpoints
         HttpRequest http, RenderRequestValidator validator, RenderGate gate, RenderTelemetry telemetry,
         IOptions<RenderLimits> limits, CancellationToken cancellationToken)
     {
-        if (!http.HasJsonContentType())
+        IResult Problem(int status, string title, string detail)
         {
-            telemetry.Rejected(StatusCodes.Status415UnsupportedMediaType, 1);
-            return Results.Problem(
-                statusCode: StatusCodes.Status415UnsupportedMediaType,
-                title: "Unsupported media type",
-                detail: "POST /render requires Content-Type: application/json.");
+            telemetry.Rejected(status, 1);
+            return Results.Problem(statusCode: status, title: title, detail: detail);
         }
+
+        IResult Invalid(IEnumerable<KeyValuePair<string, string[]>> errors)
+        {
+            telemetry.Rejected(StatusCodes.Status400BadRequest, errors.Sum(e => e.Value.Length));
+            return Results.ValidationProblem(errors);
+        }
+
+        if (!http.HasJsonContentType())
+            return Problem(StatusCodes.Status415UnsupportedMediaType, "Unsupported media type",
+                "POST /render requires Content-Type: application/json.");
 
         var body = await ReadBodyAsync(http, limits.Value.MaxRequestBodyBytes, cancellationToken);
         if (body is null)
-        {
-            telemetry.Rejected(StatusCodes.Status413PayloadTooLarge, 1);
-            return Results.Problem(
-                statusCode: StatusCodes.Status413PayloadTooLarge,
-                title: "Request body too large",
-                detail: $"The request body must be at most {limits.Value.MaxRequestBodyBytes} bytes.");
-        }
+            return Problem(StatusCodes.Status413PayloadTooLarge, "Request body too large",
+                $"The request body must be at most {limits.Value.MaxRequestBodyBytes} bytes.");
 
         RenderRequest? request;
         try
@@ -65,22 +66,15 @@ public static partial class RenderEndpoints
         }
         catch (JsonException ex)
         {
-            telemetry.Rejected(StatusCodes.Status400BadRequest, 1);
-            return Results.ValidationProblem(DescribeJsonError(ex));
+            return Invalid(DescribeJsonError(ex));
         }
 
         if (request is null)
-        {
-            telemetry.Rejected(StatusCodes.Status400BadRequest, 1);
-            return Results.ValidationProblem(new Dictionary<string, string[]> { ["body"] = ["Request body must be a JSON object."] });
-        }
+            return Invalid(new Dictionary<string, string[]> { ["body"] = ["Request body must be a JSON object."] });
 
         var result = validator.Validate(request);
         if (!result.IsValid)
-        {
-            telemetry.Rejected(StatusCodes.Status400BadRequest, result.Errors.Values.Sum(e => e.Length));
-            return Results.ValidationProblem(result.Errors);
-        }
+            return Invalid(result.Errors);
 
         var job = result.Job!;
 
@@ -106,11 +100,11 @@ public static partial class RenderEndpoints
         var renderStart = Stopwatch.GetTimestamp();
         try
         {
-            var canvas = new RenderPipeline(job.Font).Render(job.Text, job.Options, timeout.Token);
+            var canvas = RenderPipeline.Draw(job.Layout, job.Options, timeout.Token);
             timeout.Token.ThrowIfCancellationRequested();
-            var image = job.Encoder.Encode(canvas);
+            var image = PngEncoder.Encode(canvas);
             telemetry.Rendered(job, canvas.Width, canvas.Height, queued, Stopwatch.GetElapsedTime(renderStart));
-            return Results.File(image, job.Encoder.ContentType);
+            return Results.File(image, PngEncoder.ContentType);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -161,15 +155,6 @@ public static partial class RenderEndpoints
 
     [GeneratedRegex("The JSON property '([^']*)' could not be mapped")]
     private static partial Regex UnmappedProperty();
-}
-
-/// <summary>Healthy once fonts are loaded. Fonts load at startup and fail fast, so this reports what was loaded.</summary>
-public sealed class FontsHealthCheck(FontRegistry fonts) : IHealthCheck
-{
-    public Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default) =>
-        Task.FromResult(fonts.Fonts.Count > 0
-            ? HealthCheckResult.Healthy($"{fonts.Fonts.Count} fonts loaded.")
-            : HealthCheckResult.Unhealthy("No fonts loaded."));
 }
 
 /// <summary>Rejects nonsensical limits at startup (PLAN_PART_2 decision 15).</summary>
