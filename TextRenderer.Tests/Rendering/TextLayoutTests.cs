@@ -112,4 +112,29 @@ public class TextLayoutTests
         Assert.Equal((int)MathF.Ceiling(5 * advance), layout.Width);
         Assert.Equal(4 * advance, layout.Glyphs[^1].PenX, 0.001f);
     }
+
+    private sealed class BoxFont(float minX, float minY, float maxX, float maxY) : IFontSource
+    {
+        public FontMetrics Metrics { get; } = new(64, 48, -16, 0);
+        public bool HasGlyph(int codepoint) => true;
+        public Glyph GetGlyph(int codepoint) => new(1, 32, 0,
+        [
+            new Contour(new(minX, minY), [new LineSegment(new(maxX, minY)), new LineSegment(new(maxX, maxY)), new LineSegment(new(minX, maxY))]),
+        ]);
+    }
+
+    // Size 16 (scale 0.25), padding 0: the normal canvas is 8×16 with the pen at 0 and the baseline at 12.
+    [Theory]
+    [InlineData(0, 0, 32, 32, 0f, 12f, 8, 16)]      // inside: unchanged
+    [InlineData(-8, 0, 32, 32, 2f, 12f, 10, 16)]    // 2px past the left: pen shifts, canvas grows
+    [InlineData(0, 0, 40, 32, 0f, 12f, 10, 16)]     // 2px past the right
+    [InlineData(0, 0, 32, 56, 0f, 14f, 8, 18)]      // 2px past the top: baseline shifts
+    [InlineData(0, -24, 32, 32, 0f, 12f, 8, 18)]    // 2px past the bottom
+    public void Canvas_grows_only_for_ink_that_would_be_clipped(
+        float minX, float minY, float maxX, float maxY, float penX, float baseline, int width, int height)
+    {
+        var layout = TextLayout.Layout("A", new BoxFont(minX, minY, maxX, maxY), new RenderOptions { FontSize = 16, Padding = 0 });
+
+        Assert.Equal((penX, baseline, width, height), (layout.Glyphs[0].PenX, layout.Baseline, layout.Width, layout.Height));
+    }
 }

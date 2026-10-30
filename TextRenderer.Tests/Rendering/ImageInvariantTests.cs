@@ -162,6 +162,27 @@ public class ImageInvariantTests
         Assert.Null(InkBounds(canvas));
     }
 
+    [Theory]
+    [InlineData("DejaVuSans.ttf", "Ångström fj")]
+    [InlineData("DejaVuSansMono.ttf", "Ångström fj")]
+    [InlineData("DejaVuSerif.ttf", "Ångström fj")]
+    [InlineData("DejaVuSerif.ttf", "j")]    // negative left bearing on the first glyph
+    [InlineData("DejaVuSerif.ttf", "fff")]  // overhang past the last advance
+    public void Zero_padding_clips_nothing(string fontFile, string text)
+    {
+        static float TotalInk(string fontFile, string text, int padding)
+        {
+            var canvas = new RenderPipeline(Font(fontFile)).Render(text, new RenderOptions { FontSize = 64, Padding = padding });
+            var ink = 0f;
+            for (var y = 0; y < canvas.Height; y++)
+            for (var x = 0; x < canvas.Width; x++)
+                ink += Coverage(canvas, x, y);
+            return ink;
+        }
+
+        Assert.Equal(TotalInk(fontFile, text, 8), TotalInk(fontFile, text, 0), 0.01f);
+    }
+
     [Fact]
     public void Same_input_gives_byte_identical_png()
     {
