@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
@@ -24,7 +25,9 @@ public static partial class RenderEndpoints
             .Produces(StatusCodes.Status200OK, contentType: "image/png", additionalContentTypes: "image/x-portable-pixmap")
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status413PayloadTooLarge)
-            .ProducesProblem(StatusCodes.Status415UnsupportedMediaType);
+            .ProducesProblem(StatusCodes.Status415UnsupportedMediaType)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests)
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
 
         app.MapGet("/fonts", (FontRegistry fonts) => fonts.Fonts)
             .WithName("ListFonts")
@@ -32,7 +35,8 @@ public static partial class RenderEndpoints
     }
 
     private static async Task<IResult> RenderAsync(
-        HttpRequest http, RenderRequestValidator validator, IOptions<RenderLimits> limits, CancellationToken cancellationToken)
+        HttpRequest http, RenderRequestValidator validator, RenderGate gate, IOptions<RenderLimits> limits,
+        CancellationToken cancellationToken)
     {
         if (!http.HasJsonContentType())
             return Results.Problem(
@@ -65,8 +69,37 @@ public static partial class RenderEndpoints
             return Results.ValidationProblem(result.Errors);
 
         var job = result.Job!;
-        var canvas = new RenderPipeline(job.Font).Render(job.Text, job.Options);
-        return Results.File(job.Encoder.Encode(canvas), job.Encoder.ContentType);
+
+        // Only render + encode needs a slot (decision 18). cancellationToken is RequestAborted,
+        // so a client that disconnects while queued leaves the queue.
+        using var lease = await gate.AcquireAsync(cancellationToken);
+        if (!lease.IsAcquired)
+        {
+            var retryAfter = limits.Value.RetryAfterSeconds;
+            http.HttpContext.Response.Headers.RetryAfter = retryAfter.ToString(CultureInfo.InvariantCulture);
+            return Results.Problem(
+                statusCode: StatusCodes.Status429TooManyRequests,
+                title: "Too many requests",
+                detail: $"The service is busy. Retry after {retryAfter} second{(retryAfter == 1 ? "" : "s")}.");
+        }
+
+        // The timeout starts once the slot is held: time spent queued doesn't count (decision 19).
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(limits.Value.RenderTimeout);
+        try
+        {
+            var canvas = new RenderPipeline(job.Font).Render(job.Text, job.Options, timeout.Token);
+            timeout.Token.ThrowIfCancellationRequested();
+            return Results.File(job.Encoder.Encode(canvas), job.Encoder.ContentType);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status503ServiceUnavailable,
+                title: "Render timed out",
+                detail: $"Rendering took longer than the {limits.Value.RenderTimeout.TotalSeconds:0.###} second limit. " +
+                        "Use shorter text or a smaller font size.");
+        }
     }
 
     /// <summary>Reads the body, or returns null if it exceeds <paramref name="maxBytes"/> (declared or actual).</summary>

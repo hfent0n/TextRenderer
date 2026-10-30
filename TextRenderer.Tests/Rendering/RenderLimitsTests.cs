@@ -26,6 +26,7 @@ public class RenderLimitsTests
         Assert.Equal(TimeSpan.FromSeconds(5), limits.RenderTimeout);
         Assert.Equal(Environment.ProcessorCount, limits.MaxConcurrentRenders);
         Assert.Equal(100, limits.MaxQueuedRenders);
+        Assert.Equal(1, limits.RetryAfterSeconds);
         Assert.Equal("fonts", limits.FontDirectory);
     }
 
@@ -88,6 +89,7 @@ public class RenderLimitsTests
         { "RenderTimeout=00:00:00", "RenderTimeout must be positive." },
         { "MaxConcurrentRenders=0", "MaxConcurrentRenders must be positive." },
         { "MaxQueuedRenders=-1", "MaxQueuedRenders must not be negative." },
+        { "RetryAfterSeconds=0", "RetryAfterSeconds must be positive." },
         { "FontDirectory= ", "FontDirectory is required." },
     };
 

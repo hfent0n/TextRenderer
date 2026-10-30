@@ -17,6 +17,8 @@ builder.Services.AddSingleton(sp => FontRegistry.Load(sp.GetRequiredService<IOpt
 builder.Services.AddSingleton(sp => new RenderRequestValidator(
     sp.GetRequiredService<FontRegistry>(), sp.GetRequiredService<IOptions<RenderLimits>>().Value));
 
+builder.Services.AddSingleton(sp => new RenderGate(sp.GetRequiredService<IOptions<RenderLimits>>().Value));
+
 builder.Services.AddHealthChecks().AddCheck<FontsHealthCheck>("fonts");
 
 var app = builder.Build();

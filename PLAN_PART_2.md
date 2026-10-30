@@ -27,6 +27,9 @@ Job 1 (rendering core, its decisions and its tests) is in [PLAN_PART_1.md](PLAN_
 15. **Limits are validated at startup.** The service refuses to start if any limit is nonsensical (non-positive sizes or counts, `MinFontSize` > `MaxFontSize`, zero timeout), consistent with decision 10.
 16. **Unknown JSON properties are rejected** with `400` naming the property, so a typo like `"forground"` isn't silently ignored. Property names stay case-insensitive.
 17. **`POST /render` requires `Content-Type: application/json`**; anything else gets `415`.
+18. **The concurrency limit wraps only render + encode.** Reading the body, parsing and validation run without a slot, so a slow upload can't hold a render slot and invalid requests get their `400` immediately even under load. Requests queue oldest-first; a client that disconnects while queued leaves the queue.
+19. **The render timeout counts render time only.** The clock starts once a request has a slot; time queued is bounded by `MaxQueuedRenders` instead. Cancellation is checked per glyph in both layout and rendering.
+20. **`Retry-After` on `429` is configurable**: `RetryAfterSeconds`, default 1.
 
 ## API
 
@@ -102,6 +105,7 @@ Bound from `appsettings.json` → `Render` into a `RenderLimits` options class. 
 | `RenderTimeout` | 5 s | |
 | `MaxConcurrentRenders` | number of CPU cores | Rendering is CPU-bound |
 | `MaxQueuedRenders` | 100 | Beyond this, `429` |
+| `RetryAfterSeconds` | 1 | `Retry-After` header on `429` (decision 20) |
 | `FontDirectory` | `fonts` | |
 
 The canvas size check runs **after layout and before the canvas is allocated**, so an oversized request costs almost nothing.
@@ -158,7 +162,7 @@ Must-have first. Everything from step 5 on is cut first if time runs out.
    - 🧪 `GET /fonts` lists the three fonts; `GET /health` returns `200`.
    - 🧪 A forced internal exception gives `500 ProblemDetails` without a stack trace.
 4. **Protection: concurrency limit and timeout**
-   - Rate limiter (concurrency policy) on `/render`; request timeout with cancellation passed into `RenderPipeline`.
+   - A `ConcurrencyLimiter` around render + encode only (decision 18); a render-only timeout with cancellation passed into `TextLayout` and `RenderPipeline` (decision 19).
    - 🧪 With `MaxConcurrentRenders = 1` and `MaxQueuedRenders = 0`, parallel requests get some `429`s with `Retry-After`.
    - 🧪 With a tiny `RenderTimeout`, a large render returns `503`, and the pipeline stops early (cancellation honoured between glyphs).
 5. **Ink-bounds canvas sizing** (decision 6)
@@ -170,7 +174,7 @@ Must-have first. Everything from step 5 on is cut first if time runs out.
    - Built-in ASP.NET metrics, plus a render-duration histogram.
    - 🧪 A render logs one entry with those fields (using a test logger).
 7. **Concurrency and load testing**
-   - 🧪 **Concurrency:** 200 parallel `POST /render` requests across all fonts and sizes return bytes identical to the same requests made one at a time. This checks SixLabors' `Font` and our cache are safe to share.
+   - ✅ **Concurrency (done early, in `ConcurrencyTests`):** 200 parallel `POST /render` requests across all fonts and sizes, from cold glyph caches, return bytes identical to the same requests made one at a time, with and without overload; one `SixLaborsFontSource` shared by 16 threads gives the same glyphs as one thread; `RenderGate` reaches but never exceeds its limit.
    - **Load test:** a separate NBomber console project (`TextRenderer.LoadTests`, not part of `dotnet test`). Scenarios: typical label (32px, ~20 characters), large render near the limits, and a mixed workload. Record throughput, p50/p95/p99 latency, error rate, and memory over a 5-minute soak in `LOAD_TEST_RESULTS.md`.
    - Expected finding to confirm: memory stays flat, and overload produces `429`s rather than rising latency.
 8. **Could-have: response caching**

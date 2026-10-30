@@ -12,7 +12,8 @@ public sealed record LayoutResult(float Scale, float Baseline, int Width, int He
 /// <summary>Places glyphs on a single line, left to right, using each glyph's advance width.</summary>
 public static class TextLayout
 {
-    public static LayoutResult Layout(string text, IFontSource font, RenderOptions options)
+    /// <param name="cancellationToken">Checked before each glyph.</param>
+    public static LayoutResult Layout(string text, IFontSource font, RenderOptions options, CancellationToken cancellationToken = default)
     {
         var metrics = font.Metrics;
         var scale = options.FontSize / metrics.UnitsPerEm;
@@ -21,6 +22,7 @@ public static class TextLayout
         var advanceUnits = 0L;  // summed in font units so the pen doesn't accumulate float error
         foreach (var rune in text.EnumerateRunes())
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var glyph = font.GetGlyph(rune.Value);
             glyphs.Add(new PositionedGlyph(glyph, options.Padding + advanceUnits * scale));
             advanceUnits += glyph.AdvanceWidth;
