@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -35,21 +36,27 @@ public static partial class RenderEndpoints
     }
 
     private static async Task<IResult> RenderAsync(
-        HttpRequest http, RenderRequestValidator validator, RenderGate gate, IOptions<RenderLimits> limits,
-        CancellationToken cancellationToken)
+        HttpRequest http, RenderRequestValidator validator, RenderGate gate, RenderTelemetry telemetry,
+        IOptions<RenderLimits> limits, CancellationToken cancellationToken)
     {
         if (!http.HasJsonContentType())
+        {
+            telemetry.Rejected(StatusCodes.Status415UnsupportedMediaType, 1);
             return Results.Problem(
                 statusCode: StatusCodes.Status415UnsupportedMediaType,
                 title: "Unsupported media type",
                 detail: "POST /render requires Content-Type: application/json.");
+        }
 
         var body = await ReadBodyAsync(http, limits.Value.MaxRequestBodyBytes, cancellationToken);
         if (body is null)
+        {
+            telemetry.Rejected(StatusCodes.Status413PayloadTooLarge, 1);
             return Results.Problem(
                 statusCode: StatusCodes.Status413PayloadTooLarge,
                 title: "Request body too large",
                 detail: $"The request body must be at most {limits.Value.MaxRequestBodyBytes} bytes.");
+        }
 
         RenderRequest? request;
         try
@@ -58,23 +65,33 @@ public static partial class RenderEndpoints
         }
         catch (JsonException ex)
         {
+            telemetry.Rejected(StatusCodes.Status400BadRequest, 1);
             return Results.ValidationProblem(DescribeJsonError(ex));
         }
 
         if (request is null)
+        {
+            telemetry.Rejected(StatusCodes.Status400BadRequest, 1);
             return Results.ValidationProblem(new Dictionary<string, string[]> { ["body"] = ["Request body must be a JSON object."] });
+        }
 
         var result = validator.Validate(request);
         if (!result.IsValid)
+        {
+            telemetry.Rejected(StatusCodes.Status400BadRequest, result.Errors.Values.Sum(e => e.Length));
             return Results.ValidationProblem(result.Errors);
+        }
 
         var job = result.Job!;
 
         // Only render + encode needs a slot (decision 18). cancellationToken is RequestAborted,
         // so a client that disconnects while queued leaves the queue.
+        var queueStart = Stopwatch.GetTimestamp();
         using var lease = await gate.AcquireAsync(cancellationToken);
+        var queued = Stopwatch.GetElapsedTime(queueStart);
         if (!lease.IsAcquired)
         {
+            telemetry.Overloaded(job, queued);
             var retryAfter = limits.Value.RetryAfterSeconds;
             http.HttpContext.Response.Headers.RetryAfter = retryAfter.ToString(CultureInfo.InvariantCulture);
             return Results.Problem(
@@ -86,14 +103,18 @@ public static partial class RenderEndpoints
         // The timeout starts once the slot is held: time spent queued doesn't count (decision 19).
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(limits.Value.RenderTimeout);
+        var renderStart = Stopwatch.GetTimestamp();
         try
         {
             var canvas = new RenderPipeline(job.Font).Render(job.Text, job.Options, timeout.Token);
             timeout.Token.ThrowIfCancellationRequested();
-            return Results.File(job.Encoder.Encode(canvas), job.Encoder.ContentType);
+            var image = job.Encoder.Encode(canvas);
+            telemetry.Rendered(job, canvas.Width, canvas.Height, queued, Stopwatch.GetElapsedTime(renderStart));
+            return Results.File(image, job.Encoder.ContentType);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
+            telemetry.TimedOut(job, queued, Stopwatch.GetElapsedTime(renderStart));
             return Results.Problem(
                 statusCode: StatusCodes.Status503ServiceUnavailable,
                 title: "Render timed out",

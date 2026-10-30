@@ -19,6 +19,8 @@ builder.Services.AddSingleton(sp => new RenderRequestValidator(
 
 builder.Services.AddSingleton(sp => new RenderGate(sp.GetRequiredService<IOptions<RenderLimits>>().Value));
 
+builder.Services.AddSingleton<RenderTelemetry>();
+
 builder.Services.AddHealthChecks().AddCheck<FontsHealthCheck>("fonts");
 
 var app = builder.Build();
