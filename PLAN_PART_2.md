@@ -175,8 +175,7 @@ Must-have first. Everything from step 5 on is cut first if time runs out.
    - 🧪 A render logs one entry with those fields (using a test logger).
 7. **Concurrency and load testing**
    - ✅ **Concurrency (done early, in `ConcurrencyTests`):** 200 parallel `POST /render` requests across all fonts and sizes, from cold glyph caches, return bytes identical to the same requests made one at a time, with and without overload; one `SixLaborsFontSource` shared by 16 threads gives the same glyphs as one thread; `RenderGate` reaches but never exceeds its limit.
-   - **Load test:** a separate NBomber console project (`TextRenderer.LoadTests`, not part of `dotnet test`). Scenarios: typical label (32px, ~20 characters), large render near the limits, and a mixed workload. Record throughput, p50/p95/p99 latency, error rate, and memory over a 5-minute soak in `LOAD_TEST_RESULTS.md`.
-   - Expected finding to confirm: memory stays flat, and overload produces `429`s rather than rising latency.
+   - ✅ **Load test:** `TextRenderer.LoadTests` (NBomber console project, not part of `dotnet test`). Results are in [LOAD_TEST_RESULTS.md](LOAD_TEST_RESULTS.md): memory stayed flat and overload produced `429`s, not errors.
 8. **Could-have: response caching**
    - Rendering is deterministic, so identical requests can return a strong `ETag` (hash of the normalised request) and honour `If-None-Match` with `304`, and/or keep a small in-memory LRU of encoded images.
    - 🧪 Repeat request with `If-None-Match` returns `304` and no body.
@@ -203,5 +202,6 @@ Must-have first. Everything from step 5 on is cut first if time runs out.
 ## Future work
 
 - Small-text quality: exact-area coverage (see Part 1, "Future work").
+- Telemetry dashboard: logs and metrics are produced but nothing consumes them yet. Add an OpenTelemetry exporter (a `/metrics` endpoint for Prometheus, or a push to a collector) and a Grafana dashboard for p95 render time, timeout rate, `429` rate and queue wait, with alerts on those. JSON console logs would let a log system collect the structured fields.
 - Streaming the encoded image straight to the response, and pooling canvas buffers with `ArrayPool`, to cut allocations under load.
 - Per-client rate limits once callers are identified.
