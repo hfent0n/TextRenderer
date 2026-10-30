@@ -240,6 +240,35 @@ public class RenderApiTests(WebApplicationFactory<Program> factory) : IClassFixt
         Assert.Contains("/fonts", paths);
     }
 
+    [Fact]
+    public async Task The_documented_example_request_renders()
+    {
+        var doc = await _client.GetFromJsonAsync<JsonElement>("/openapi/v1.json");
+        var example = doc.GetProperty("components").GetProperty("schemas").GetProperty("RenderRequest").GetProperty("example");
+
+        var response = await PostJson(example.GetRawText());
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Swagger_ui_is_served_in_development()
+    {
+        var response = await _client.GetAsync("/swagger/index.html");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Swagger_ui_and_openapi_are_not_served_in_production()
+    {
+        using var production = factory.WithWebHostBuilder(b => b.UseEnvironment("Production"));
+        var client = production.CreateClient();
+
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/swagger/index.html")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/openapi/v1.json")).StatusCode);
+    }
+
     // --- 500 ---
 
     private sealed class ExplodingFontSource : IFontSource

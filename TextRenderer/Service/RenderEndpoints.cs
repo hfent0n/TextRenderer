@@ -21,6 +21,7 @@ public static partial class RenderEndpoints
     {
         app.MapPost("/render", RenderAsync)
             .WithName("Render")
+            .WithTags("Rendering")
             .WithSummary("Render a single line of text in a registered font.")
             .Accepts<RenderRequest>("application/json")
             .Produces(StatusCodes.Status200OK, contentType: PngEncoder.ContentType)
@@ -33,6 +34,7 @@ public static partial class RenderEndpoints
 
         app.MapGet("/fonts", (FontRegistry fonts) => fonts.Fonts)
             .WithName("ListFonts")
+            .WithTags("Rendering")
             .WithSummary("List the fonts that can be used in POST /render.");
     }
 

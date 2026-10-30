@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.Options;
 using TextRenderer.Rendering;
 using TextRenderer.Service;
@@ -5,7 +6,13 @@ using TextRenderer.Service;
 var builder = WebApplication.CreateBuilder(args);
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options => options.AddSchemaTransformer((schema, context, _) =>
+{
+    // Prefills Swagger's "Try it out" with a request that works.
+    if (context.JsonTypeInfo.Type == typeof(RenderRequest))
+        schema.Example = JsonNode.Parse("""{ "text": "Hello, World!", "font": "dejavu-sans", "fontSize": 48 }""");
+    return Task.CompletedTask;
+}));
 builder.Services.AddProblemDetails();
 
 builder.Services.AddOptions<RenderLimits>()
@@ -36,6 +43,7 @@ app.UseStatusCodePages();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.UseSwaggerUI(options => options.SwaggerEndpoint("/openapi/v1.json", "TextRenderer"));
 }
 
 app.UseHttpsRedirection();

@@ -94,6 +94,8 @@ IDs come from the font's family and style (decision 9).
 
 Keep the template's `AddOpenApi()` and describe the real endpoints, so teams can discover the contract.
 
+Swagger UI (`/swagger`) displays that document in Development only, and its example request is tested so it keeps working.
+
 ## Limits
 
 Bound from `appsettings.json` → `Render` into a `RenderLimits` options class. Defaults:
