@@ -1,3 +1,27 @@
+# TextRenderer
+
+A from-scratch text-to-image HTTP service in C#/.NET 10, built with Claude Code to show how I work with AI. It has its own glyph layout, rasteriser and PNG encoder.
+
+- **Tested:** 358 tests, including pixel comparison against SkiaSharp
+- **Load tested:** 17.3 million requests with no server errors
+- **Plans and evidence:** [Part 1](PLAN_PART_1.md), [Part 2](PLAN_PART_2.md), [load results](LOAD_TEST_RESULTS.md)
+
+## How to Run
+
+Start the service:
+
+```bash
+dotnet run --project TextRenderer
+```
+
+Then open <http://localhost:5133/swagger> to view the API and render an image from the browser.
+
+Run the tests:
+
+```bash
+dotnet test
+```
+
 ## The Purpose
 
 This repo is an exercise in AI development, where I have gone from no specific text-to-image rendering knowledge to building a fully functional service.
@@ -45,7 +69,15 @@ This catches missing coverage and gets Claude to quickly make the change.
 
 `> nice. Let's plan part two. We will need to expose the service over http with a POST/render and a GET/fonts endpoint. We will need validation on inputs to only allow accepted characters. We will want to create integration tests / load tests / concurrency and make sure the service is stable. Is there anything I've missed?`
 
+`> Downgrade to 2.x`
+
+Claude flagged that SixLabors.Fonts needs a licence key for Release builds, so I chose to downgrade. When it tried this, it found 2.2.0 has the same check, and 2.1.3 only skips the check while keeping the same licence and needing fragile workarounds. We reverted to 3.2 based on that evidence. It's worth being willing to change a decision once you have the facts.
+
 ## Implementation
+
+`> I can't see any tests testing concurrency`
+
+Claude had reported the limit and timeout work as tested, but those tests only used a fake font. Nothing ran the real renderer in parallel. Pushing back led to tests that compare parallel output byte for byte against sequential output, and a deliberately added race showed they catch real bugs. Don't take "done" on trust.
 
 ` > Start step 2. Be concise with testing whilst keeping good coverage. Our test suite is starting to become bloated.`
 
