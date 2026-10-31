@@ -24,11 +24,11 @@ dotnet test
 
 ## The Purpose
 
-This repo is an exercise in AI development, where I have gone from no specific text-to-image rendering knowledge to building a fully functional service.
-The task was taken from an example AI interview and is given at the bottom of this document. This project was not done in a standard interview timeframe as it was more important to show a proper planning process and to be kept in the loop in any decision making.
+This repo is an exercise in AI-assisted development, where I have gone from no prior knowledge of text rendering to building a fully functional service.
+The task was taken from an example AI interview and is given at the bottom of this document. This project was not done in a standard interview timeframe because my priority was to show proper planning and to stay in control of every decision.
 
-## Usage of AI and Example Prompts.
-I used Claude with Opus 5.5. In short the process was to gain an understanding of the problem domain, then devise a plan, then execute the plan in stages, whilst being kept in the loop within each step, then reviewing code changes before committing.
+## How I Used AI
+I used Claude with Opus 5.5. In short, the process was to gain an understanding of the problem domain, devise a plan, and execute it in stages, staying in the loop at each step and reviewing code changes before committing.
 
 ### Initial Querying
 `> Summarise the README and provide explanations for any JARGON`
@@ -36,7 +36,7 @@ I used Claude with Opus 5.5. In short the process was to gain an understanding o
 `> Lets focus on Job 1. Explain an example from end to end of how the text is processed into an image`
 
 ### Planning Stage
-Now it's time to start planning by bouncing off the AI and drive it into fleshing out a full plan based off the conversation.
+Next I bounced ideas off the AI and turned the conversation into a full plan.
 
 `> plan only: What library could be used for the font parsing?`
 
@@ -46,14 +46,14 @@ Now it's time to start planning by bouncing off the AI and drive it into fleshin
 
 `> Unit tests at each stage should be simple enough and should be added and passed before moving on. How can we test for correctness of the final image? Is it good enough for me to do it by eye`
 
-The AI suggested using another library as an oracle to test against, which was a good idea. It paid of checking if there was another way.
+The AI suggested using another library as an oracle to test against, which was a good idea. It paid off to ask whether there was a better way.
 
-## Implementation
-Now it is time to start development. At this stage we go through the plan whilst I steer the AI into completing the task the way I want.
+## Implementation: Part 1
+Now it is time to start development. At this stage we work through the plan, with me steering the AI so the work is done the way I want.
 
 `> Lets start step 2. Keep me in the loop and ask before making any decisions not in the plan`
 
-Don't let Claude go on it's own path. It also helps keep you informed piece meal on the changes being made.
+Don't let Claude go off on its own path. This also keeps you informed of changes as they happen.
 
 `> Could you explain each of the none trivial assertions on the new test cases`
 
@@ -73,20 +73,20 @@ This catches missing coverage and gets Claude to quickly make the change.
 
 Claude flagged that SixLabors.Fonts needs a licence key for Release builds, so I chose to downgrade. When it tried this, it found 2.2.0 has the same check, and 2.1.3 only skips the check while keeping the same licence and needing fragile workarounds. We reverted to 3.2 based on that evidence. It's worth being willing to change a decision once you have the facts.
 
-## Implementation
+## Implementation: Part 2
 
 `> I can't see any tests testing concurrency`
 
 Claude had reported the limit and timeout work as tested, but those tests only used a fake font. Nothing ran the real renderer in parallel. Pushing back led to tests that compare parallel output byte for byte against sequential output, and a deliberately added race showed they catch real bugs. Don't take "done" on trust.
 
-` > Start step 2. Be concise with testing whilst keeping good coverage. Our test suite is starting to become bloated.`
+`> Let's start step 5. Try keep testing concise as possible whilst still have good coverage. Our test suite is becoming bloated`
 
-It's great to have lots of tests, but we don't want to add tonnes of redundant tests as it's hard to keep track of the contract. Claude will add the same tests in different locations if given the chance.
+It's great to have lots of tests, but we don't want redundant ones, because they make the contract harder to follow. Claude will add the same tests in different locations if given the chance.
 
 ## Clean up
 `> plan only (potential cleanup) I'm worried the codebase might have some redundant tests. Do you have suggestions for simplifying the test suite?`
 
-Claude can very quickly find similar tests. We don't want it jumping in and deleting testing without looking over what it finds first. In this case it found a lot of tests that were doubled up. 
+Claude can very quickly find similar tests. We don't want it jumping in and deleting tests without looking over what it finds first. In this case it found a lot of tests that were doubled up.
 
 ## The task
 
